@@ -1,1 +1,0 @@
-lint: ignore transient Pylance type resolution errors for discord.py stubs
