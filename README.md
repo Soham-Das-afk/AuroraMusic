@@ -1,5 +1,10 @@
 # AuroraMusic Discord Music Bot (v3.2.31)
 
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=master)
+![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
+![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
+
 AuroraMusic is a feature-rich music bot designed for Discord servers, allowing users to play music from various sources, manage queues, and interact with an intuitive user interface. This bot supports both YouTube and Spotify, providing a seamless music experience for users.
 
 ## Quick start (copy-paste)
@@ -282,6 +287,18 @@ Notes:
    ```bash
    docker compose down
    ```
+
+## CI/CD
+
+- Pushing a tag like `v3.2.31` triggers GitHub Actions to:
+   - Build and push Docker images (if secrets are configured)
+   - Create a GitHub Release with notes
+
+- Required repo secrets (Settings → Secrets and variables → Actions):
+   - `DOCKERHUB_USERNAME`: your Docker Hub username (e.g., `sohamdas103`)
+   - `DOCKERHUB_TOKEN`: a Docker Hub Personal Access Token with write permissions
+
+- If secrets are not configured, the workflow will still create the GitHub Release and skip Docker push.
 
 ## Troubleshooting
 
