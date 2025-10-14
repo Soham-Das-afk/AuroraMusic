@@ -2,6 +2,7 @@
 .env
 .env.*
 bot.log
+.copilot*
 
 # Python
 __pycache__/
