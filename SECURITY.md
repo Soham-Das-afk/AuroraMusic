@@ -4,7 +4,7 @@ Thank you for helping keep AuroraMusic and its users safe.
 
 ## Supported versions
 
-We aim to keep the latest tagged release and the `master` branch secure. Older tags may not receive fixes unless the issue is critical and easy to backport.
+I aim to keep the latest tagged release and the `master` branch secure. Older tags may not receive fixes unless the issue is critical and easy to backport.
 
 ## Reporting a vulnerability
 
@@ -15,7 +15,6 @@ We aim to keep the latest tagged release and the `master` branch secure. Older t
   - Steps to reproduce and impact
   - Any suggested mitigations
 
-We will acknowledge receipt within 7 days and provide an initial assessment or timeline.
 
 ## Scope and expectations
 
@@ -25,4 +24,4 @@ We will acknowledge receipt within 7 days and provide an initial assessment or t
 
 ## Dependencies
 
-We rely on third‑party libraries (e.g., discord.py, yt-dlp). If the issue lies in a dependency, we may coordinate upstream and track mitigation here. Dependabot is enabled to keep dependencies updated.
+I rely on third‑party libraries (e.g., discord.py, yt-dlp). If the issue lies in a dependency, I may coordinate upstream and track mitigation here. Dependabot is enabled to keep dependencies updated.

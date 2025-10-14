@@ -1,6 +1,6 @@
 # Contributing to AuroraMusic
 
-Thanks for your interest in improving AuroraMusic! This project accepts small fixes and improvements.
+Thanks for your interest in improving AuroraMusic! I accept small fixes and improvements.
 
 ## Ground rules
 
