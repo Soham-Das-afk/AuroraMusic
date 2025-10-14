@@ -6,6 +6,8 @@
 -->
 [![release](https://img.shields.io/badge/release-v3.2.31-blue)](https://github.com/Soham-Das-afk/AuroraMusic/releases/latest)
 [![build](https://img.shields.io/badge/build-GitHub%20Actions-blue)](https://github.com/Soham-Das-afk/AuroraMusic/actions)
+
+<!-- Note: Repo is currently private (dynamic GitHub badges require public visibility). Once public, you can uncomment the dynamic badges above -->
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
 ![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
 
