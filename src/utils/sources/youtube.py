@@ -103,6 +103,7 @@ class YouTubeHandlerSingleton:
                 'socket_timeout': 30,
                 'keepvideo': False,
                 'restrictfilenames': True,
+                'overwrites': False,  # do not re-download if file exists
                 'no_warnings': True,
                 'ignoreerrors': True,
                 'logtostderr': False,
@@ -131,6 +132,35 @@ class YouTubeHandlerSingleton:
                     opts['cookiefile'] = str(cookies_file)
             self._download_pool[cache_key] = yt_dlp.YoutubeDL(opts)  # type: ignore[arg-type]
         return self._download_pool[cache_key]
+
+    def find_cached_file(self, video_id: str) -> Optional[Path]:
+        """Return path to a cached mp3 for the given video id if present."""
+        try:
+            for p in self.downloads_dir.glob(f"*_{video_id}.mp3"):
+                if p.exists() and p.stat().st_size > 0:
+                    return p
+        except Exception:
+            pass
+        return None
+
+    async def download_audio(self, url: str, *, use_cookies: bool = True) -> Optional[Path]:
+        """Download audio to file using yt-dlp and return the resulting mp3 path."""
+        try:
+            loop = asyncio.get_event_loop()
+            ytdl = self._get_download_instance(use_cookies=use_cookies)
+            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=True))
+            if not data:
+                return None
+            # If it's a playlist/entry list, grab first entry
+            if isinstance(data, dict) and data.get('entries'):
+                data = data['entries'][0]
+            vid = data.get('id') if isinstance(data, dict) else None
+            if vid:
+                return self.find_cached_file(vid)
+            return None
+        except Exception as e:
+            logging.warning(f"⚠️ Download failed for {url}: {e}")
+            return None
 
     def is_url_supported(self, url: str) -> bool:
         return bool(re.search(r'(youtube\.com|youtu\.be)', url, re.IGNORECASE))
@@ -528,7 +558,7 @@ class YTDLSource(_BaseVolume):
         self.uploader = data.get('uploader')
 
     @classmethod
-    async def from_url(cls, url: str, *, loop=None, volume_percent=100, start_time=0):
+    async def from_url(cls, url: str, *, loop=None, volume_percent=100, start_time=0, prefer_file: bool = False, download_if_missing: bool = False):
         try:
             loop = loop or asyncio.get_event_loop()
             handler = youtube_handler
@@ -548,13 +578,45 @@ class YTDLSource(_BaseVolume):
                 audio_formats = [f for f in data['formats'] if f and f.get('acodec') != 'none']
                 if audio_formats:
                     audio_url = audio_formats[0].get('url')
-            if not audio_url or not _FFmpegPCMAudio:
-                raise Exception("No audio URL found or FFmpegPCMAudio unavailable")
+            if not _FFmpegPCMAudio:
+                raise Exception("FFmpegPCMAudio unavailable")
+
+            # Try local cached file if requested/available
+            video_id = data.get('id')
+            local_path: Optional[Path] = None
+            if video_id:
+                local_path = handler.find_cached_file(video_id)
+
+            if prefer_file and local_path and local_path.exists():
+                # Use local file for playback
+                before_options = f"-ss {start_time}" if start_time > 0 else None
+                options = '-vn -bufsize 1024k'
+                source = _FFmpegPCMAudio(str(local_path), before_options=before_options, options=options)  # type: ignore[misc]
+                volume = volume_percent / 100.0
+                return cls(source, data=data, volume=volume)
+
+            # Fallback to streaming
+            if not audio_url:
+                raise Exception("No audio URL found for streaming")
             before_options = f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {start_time}' if start_time > 0 else '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
             options = '-vn -bufsize 1024k'
             source = _FFmpegPCMAudio(audio_url, before_options=before_options, options=options)  # type: ignore[misc]
             volume = volume_percent / 100.0
-            return cls(source, data=data, volume=volume)
+            instance = cls(source, data=data, volume=volume)
+
+            # Optionally warm the cache by downloading in background
+            if download_if_missing and (not local_path or not local_path.exists()) and video_id:
+                async def _bg_download():
+                    try:
+                        await handler.download_audio(url, use_cookies=True)
+                    except Exception:
+                        pass
+                try:
+                    asyncio.create_task(_bg_download())
+                except Exception:
+                    pass
+
+            return instance
         except Exception as e:
             logging.error(f"❌ Error creating YTDLSource: {e}")
             raise

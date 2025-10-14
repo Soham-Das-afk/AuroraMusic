@@ -3,6 +3,7 @@ import re
 from typing import Optional, Tuple, List, Dict, Any
 from .spotify import spotify_handler
 from .youtube import youtube_handler  # ✅ Import the singleton instance
+import logging
 
 # ✅ Add input validation
 def validate_query(query: str) -> bool:
@@ -48,7 +49,7 @@ async def search_song(query: str) -> Optional[Dict[str, Any]]:
     try:
         # ✅ Input validation
         if not validate_query(query):
-            print(f"❌ Invalid query: {query}")
+            logging.debug("Invalid query: %s", query)
             return None
         
         # ✅ Normalize YouTube URLs (shorts, etc.) before search
@@ -57,18 +58,18 @@ async def search_song(query: str) -> Optional[Dict[str, Any]]:
         
         # ✅ Determine source and route accordingly
         if spotify_handler.is_url_supported(query):
-            print("🎵 Routing to Spotify search")
+            logging.debug("Routing to Spotify search")
             return await _search_spotify_song(query)
         elif youtube_handler.is_url_supported(query):
-            print("🎵 Routing to YouTube search")
+            logging.debug("Routing to YouTube search")
             return await youtube_handler.search(query)
         else:
             # Default to YouTube for text searches
-            print("🎵 Default routing to YouTube search")
+            logging.debug("Default routing to YouTube search")
             return await youtube_handler.search(query)
             
     except Exception as e:
-        print(f"❌ Universal search error: {e}")
+        logging.debug("Universal search error: %s", e)
         return None
 
 async def search_playlist(playlist_url: str) -> Tuple[Optional[Dict], List[Dict]]:
@@ -76,35 +77,35 @@ async def search_playlist(playlist_url: str) -> Tuple[Optional[Dict], List[Dict]
     try:
         # ✅ Input validation
         if not validate_query(playlist_url):
-            print(f"❌ Invalid playlist URL: {playlist_url}")
+            logging.debug("Invalid playlist URL: %s", playlist_url)
             return None, []
         
         # ✅ Route based on source
         if spotify_handler.is_url_supported(playlist_url):
-            print("📋 Routing to Spotify playlist")
+            logging.debug("Routing to Spotify playlist")
             return await spotify_handler.search_playlist(playlist_url)
         elif youtube_handler.is_url_supported(playlist_url):
-            print("📋 Routing to YouTube playlist")
+            logging.debug("Routing to YouTube playlist")
             return await youtube_handler.search_playlist(playlist_url)
         else:
-            print(f"❌ Unsupported playlist URL: {playlist_url}")
+            logging.debug("Unsupported playlist URL: %s", playlist_url)
             return None, []
             
     except Exception as e:
-        print(f"❌ Universal playlist search error: {e}")
+        logging.debug("Universal playlist search error: %s", e)
         return None, []
 
 async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
     """⚡ Fast Spotify to YouTube conversion"""
     try:
         if not spotify_handler.spotify:
-            print("❌ Spotify client not available")
+            logging.debug("Spotify client not available")
             return None
         
         content_type, spotify_id = spotify_handler.extract_spotify_id(spotify_url)
         
-        if content_type != 'track':
-            print(f"❌ Expected track, got {content_type}")
+        if content_type != 'track' or not spotify_id:
+            logging.debug("Expected track, got %s", content_type)
             return None
         
         # Get Spotify track info with timeout
@@ -114,12 +115,12 @@ async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
         )
         
         if not track_info:
-            print("❌ Failed to get Spotify track info")
+            logging.debug("Failed to get Spotify track info")
             return None
         
         # ⚡ Single optimized search strategy
         search_query = f"{track_info['name']} {track_info['artist_str']}"
-        print(f"🔍 Quick search: {search_query}")
+        logging.debug("Quick search: %s", search_query)
         
         song_data = await asyncio.wait_for(
             youtube_handler.search(search_query),
@@ -137,17 +138,17 @@ async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
                 'source': 'spotify->youtube'
             })
             
-            print(f"✅ Found match quickly")
+            logging.debug("Found match quickly")
             return song_data
         
-        print("❌ No YouTube match found")
+        logging.debug("No YouTube match found")
         return None
         
     except asyncio.TimeoutError:
-        print("⏰ Spotify search timeout")
+        logging.debug("Spotify search timeout")
         return None
     except Exception as e:
-        print(f"❌ Spotify song search error: {e}")
+        logging.debug("Spotify song search error: %s", e)
         return None
 
 def is_playlist_url(url: str) -> bool:
@@ -167,7 +168,7 @@ def is_playlist_url(url: str) -> bool:
         return False
         
     except Exception as e:
-        print(f"❌ Playlist detection error: {e}")
+        logging.debug("Playlist detection error: %s", e)
         return False
 
 def get_source_type(url: str) -> str:

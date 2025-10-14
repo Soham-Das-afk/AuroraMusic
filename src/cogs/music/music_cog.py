@@ -2,6 +2,7 @@ import discord
 import asyncio
 import time
 import traceback
+import logging
 from discord.ext import commands
 from discord import app_commands
 from collections import defaultdict
@@ -98,7 +99,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 await asyncio.sleep(3600)  # Every hour
                 await self.file_manager.cleanup_old_files()
             except Exception as e:
-                print(f"❌ Cleanup task error: {e}")
+                logging.debug("Cleanup task error: %s", e)
     
     def get_queue(self, guild_id: int):
         """Get queue for guild"""
@@ -136,31 +137,31 @@ class MusicCog(commands.Cog, name="MusicCog"):
             # Check if message still exists before trying to delete
             if message:
                 await message.delete()  # ✅ FIXED: Missing line
-                print(f"✅ Auto-deleted message after {delay}s")
+                logging.debug("Auto-deleted message after %ds", delay)
                 
         except discord.NotFound:
-            print("⚠️ Message already deleted")
+            logging.debug("Message already deleted")
         except discord.Forbidden:
-            print("⚠️ No permission to delete message")
+            logging.debug("No permission to delete message")
         except discord.HTTPException as e:
-            print(f"⚠️ HTTP error deleting message: {e}")
+            logging.debug("HTTP error deleting message: %s", e)
         except Exception as e:
-            print(f"⚠️ Error auto-deleting message: {e}")
+            logging.debug("Error auto-deleting message: %s", e)
 
     async def safe_delete_message(self, message):
         """Enhanced message deletion with error handling"""
         try:
             if message and not message.author.bot:
                 await message.delete()  # ✅ FIXED: Missing line
-                print("✅ Deleted user message")
+                logging.debug("Deleted user message")
         except discord.NotFound:
             pass  # Already deleted
         except discord.Forbidden:
-            print("⚠️ No permission to delete message")
+            logging.debug("No permission to delete message")
         except discord.HTTPException as e:
-            print(f"⚠️ HTTP error deleting message: {e}")
+            logging.debug("HTTP error deleting message: %s", e)
         except Exception as e:
-            print(f"⚠️ Error deleting message: {e}")
+            logging.debug("Error deleting message: %s", e)
 
     def is_music_channel(self, channel_id: int, guild_id: int) -> bool:
         """Check if a channel is a registered music controller channel"""
@@ -181,7 +182,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
             return False
             
         except Exception as e:
-            print(f"❌ Error checking music channel: {e}")
+            logging.debug("Error checking music channel: %s", e)
             return False
 
     async def handle_song_request(self, message: discord.Message, query: str) -> None:
@@ -189,18 +190,27 @@ class MusicCog(commands.Cog, name="MusicCog"):
         timer_key = self.perf_monitor.start_timer("handle_song_request")
         
         try:
-            # Block requests from unauthorized guilds
-            if not Config.is_guild_allowed(message.guild.id):
-                print(f"❌ Ignoring music request from unauthorized guild: {message.guild.name} ({message.guild.id})")
+            guild = getattr(message, 'guild', None)
+            if not guild:
+                # Ignore DMs
+                await self.safe_delete_message(message)
+                return
+            guild_id = guild.id
+            channel = getattr(message, 'channel', None)
+            channel_id = getattr(channel, 'id', 0)
+            channel_name = getattr(channel, 'name', str(channel_id))
+            # Block requests from unauthorized guilds (skip DMs)
+            if not Config.is_guild_allowed(guild_id):
+                logging.debug("Ignoring music request from unauthorized guild: %s (%s)", guild.name, guild_id)
                 await self.safe_delete_message(message)
                 return
             
             # ✅ STRICT VALIDATION: Only process requests in registered controller channels
-            if not self.is_music_channel(message.channel.id, message.guild.id):
-                print(f"⚠️ Ignoring request in non-controller channel: #{message.channel.name}")  # ✅ FIXED: Missing line
+            if not self.is_music_channel(channel_id, guild_id):
+                logging.debug("Ignoring request in non-controller channel: #%s", channel_name)
                 return
             
-            print(f"🎵 [CONTROLLER] Request: '{query}' by {message.author.display_name}")
+            logging.debug("[CONTROLLER] Request: '%s' by %s", query, message.author.display_name)
             
             # ✅ Input validation
             if not validate_query(query):
@@ -208,14 +218,14 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 return
             
             # ✅ Rate limiting
-            if not self._check_rate_limit(message.author.id, message.guild.id):
+            if not self._check_rate_limit(message.author.id, guild_id):
                 await self.safe_delete_message(message)  # ✅ FIXED: Missing line
                 return
             
             # ✅ Prevent duplicate processing
-            message_key = f"{message.guild.id}_{message.id}"
+            message_key = f"{guild_id}_{message.id}"
             if message_key in self._processing_messages:
-                print(f"⚠️ Already processing message {message.id}")  # ✅ FIXED: Missing line
+                logging.debug("Already processing message %s", message.id)  # ✅ FIXED: Missing line
                 return
             self._processing_messages.add(message_key)
             
@@ -226,19 +236,19 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 )
             
             except discord.HTTPException as e:
-                print(f"❌ Discord API error: {e}")  # ✅ FIXED: Missing line
+                logging.debug("Discord API error: %s", e)  # ✅ FIXED: Missing line
                 await self.safe_delete_message(message)
             except asyncio.TimeoutError:
-                print(f"⏰ Request processing timeout: {query}")  # ✅ FIXED: Missing line
+                logging.debug("Request processing timeout: %s", query)  # ✅ FIXED: Missing line
                 await self.safe_delete_message(message)
             except Exception as inner_error:
-                print(f"❌ Error processing request: {inner_error}")  # ✅ FIXED: Missing line
+                logging.debug("Error processing request: %s", inner_error)  # ✅ FIXED: Missing line
                 await self.safe_delete_message(message)
             finally:
                 self._processing_messages.discard(message_key)  # ✅ FIXED: Missing line
                 
         except Exception as e:
-            print(f"❌ Unexpected error handling request: {e}")
+            logging.exception("Unexpected error handling request: %s", e)
             traceback.print_exc()
             self.perf_monitor.record_error("handle_song_request")
             await self.safe_delete_message(message)
@@ -266,7 +276,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 await self._handle_single_song_request(query, message.author, status_msg, message.guild.id, voice_client)
         
         except Exception as e:
-            print(f"❌ Error processing music request: {e}")
+            logging.debug("Error processing music request: %s", e)
             try:
                 await status_msg.edit(content="❌ Request failed!")
                 asyncio.create_task(self.delete_after_delay(status_msg, 3))
@@ -291,7 +301,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
             }
             
             queue.add_request(request_data)
-            print(f"📋 Added request #{request_order}: {query[:50]}")
+            logging.debug("Added request #%s: %s", request_order, query[:50])
             
             await status_msg.edit(content="🎵 Song queued! Processing...")
             asyncio.create_task(self.delete_after_delay(status_msg, 5))
@@ -301,7 +311,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
             asyncio.create_task(self._check_and_start_playback(voice_client, guild_id))
             
         except Exception as e:
-            print(f"❌ Error handling single song: {e}")
+            logging.debug("Error handling single song: %s", e)
             try:
                 await status_msg.edit(content="❌ Song request failed!")
                 asyncio.create_task(self.delete_after_delay(status_msg, 3))
@@ -324,7 +334,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 asyncio.create_task(self.delete_after_delay(status_msg, 5))
                 return
             except Exception as search_error:
-                print(f"❌ Playlist search error: {search_error}")
+                logging.debug("Playlist search error: %s", search_error)
                 await status_msg.edit(content="❌ Playlist processing failed!")
                 asyncio.create_task(self.delete_after_delay(status_msg, 5))
                 return
@@ -336,9 +346,9 @@ class MusicCog(commands.Cog, name="MusicCog"):
             
             # ✅ Process all songs
             total_songs = len(songs)
-            playlist_title = playlist_info.get('title', 'Unknown Playlist')
+            playlist_title = (playlist_info or {}).get('title', 'Unknown Playlist')
             
-            print(f"📋 Adding {total_songs} songs from '{playlist_title}' to queue")
+            logging.debug("Adding %d songs from '%s' to queue", total_songs, playlist_title)
             
             queue = self.get_queue(guild_id)
             
@@ -355,14 +365,14 @@ class MusicCog(commands.Cog, name="MusicCog"):
                 queue.add_request(request_data)
             
             # ✅ Better success message with playlist info
-            if playlist_info.get('on_demand_conversion'):
+            if (playlist_info or {}).get('on_demand_conversion'):
                 success_msg = f"✅ Added {total_songs} songs from **{playlist_title}** (Spotify)"
                 success_msg += f"\n🎵 Songs will be converted during playback"
             else:
                 success_msg = f"✅ Added {total_songs} songs from **{playlist_title}**"
             
-            if playlist_info.get('owner'):
-                success_msg += f" by {playlist_info['owner']}"
+            if (playlist_info or {}).get('owner'):
+                success_msg += f" by {(playlist_info or {}).get('owner')}"
             
             await status_msg.edit(content=success_msg)
             asyncio.create_task(self.delete_after_delay(status_msg, 8))
@@ -372,7 +382,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
             asyncio.create_task(self._check_and_start_playback(voice_client, guild_id))
             
         except Exception as e:
-            print(f"❌ Error handling playlist: {e}")
+            logging.exception("Error handling playlist: %s", e)
             traceback.print_exc()
             try:
                 await status_msg.edit(content="❌ Playlist processing failed!")
@@ -384,20 +394,21 @@ class MusicCog(commands.Cog, name="MusicCog"):
         """⚡ FIXED queue processing - STRICT FIFO ORDER"""
         timer_key = self.perf_monitor.start_timer("process_queue")
         
+        queue = None
         try:
             queue = self.get_queue(guild_id)
             
-            print(f"🔍 [QUEUE DEBUG] Processing queue for guild {guild_id}")
-            print(f"🔍 [QUEUE DEBUG] Queue size: {len(queue.queue)} requests")
-            print(f"🔍 [QUEUE DEBUG] Processed size: {len(queue.processed_queue)} songs")
-            print(f"🔍 [QUEUE DEBUG] Currently processing: {queue.processing}")
+            logging.debug("[QUEUE] Processing queue for guild %s", guild_id)
+            logging.debug("[QUEUE] Queue size: %d requests", len(queue.queue))
+            logging.debug("[QUEUE] Processed size: %d songs", len(queue.processed_queue))
+            logging.debug("[QUEUE] Currently processing: %s", queue.processing)
             
             if queue.processing:
-                print(f"🔍 [QUEUE DEBUG] Already processing, skipping")
+                logging.debug("[QUEUE] Already processing, skipping")
                 return
             
             queue.processing = True
-            print(f"🔍 [QUEUE DEBUG] Started processing")
+            logging.debug("[QUEUE] Started processing")
             
             try:
                 while queue.queue:
@@ -407,12 +418,16 @@ class MusicCog(commands.Cog, name="MusicCog"):
                     
             finally:
                 queue.processing = False
-                print(f"🔍 [QUEUE DEBUG] Finished processing")
+                logging.debug("[QUEUE] Finished processing")
         
         except Exception as e:
-            print(f"❌ [QUEUE DEBUG] Error processing queue: {e}")
+            logging.exception("[QUEUE] Error processing queue: %s", e)
             traceback.print_exc()
-            queue.processing = False
+            if queue is not None:
+                try:
+                    queue.processing = False
+                except Exception:
+                    pass
             self.perf_monitor.record_error("process_queue")
         finally:
             self.perf_monitor.end_timer(timer_key)
@@ -429,13 +444,13 @@ class MusicCog(commands.Cog, name="MusicCog"):
             song_data = request.get('song_data')
             request_order = request.get('order', 'unknown')
             
-            print(f"🔍 Processing song request: {query[:50]} (order: {request_order})")
+            logging.debug("Processing song request: %s (order: %s)", query[:50], request_order)
             
             # ✅ Handle pre-loaded song data (from playlists)
             if song_data:
                 # ✅ Check if this is a Spotify song that needs conversion
                 if song_data.get('needs_conversion') and song_data.get('conversion_query'):
-                    print(f"🎵 Converting Spotify song on-demand: {song_data['title'][:50]}")
+                    logging.debug("Converting Spotify song on-demand: %s", song_data['title'][:50])
                     
                     # Import here to avoid circular imports
                     from utils.sources.spotify import spotify_handler
@@ -445,7 +460,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                     youtube_song = await spotify_handler.search_youtube_for_track(song_data['spotify_info'])
                     
                     if youtube_song:
-                        print(f"✅ Converted: {youtube_song.get('title', 'Unknown')[:50]}")
+                        logging.debug("Converted: %s", youtube_song.get('title', 'Unknown')[:50])
                         queue = self.get_queue(guild_id)
                         queue.add_processed_song(youtube_song)
                         # Update controller to reflect new Up Next
@@ -454,7 +469,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                         status = "playing" if vc and (vc.is_playing() or vc.is_paused()) else "waiting"
                         await self.update_controller_embed(guild_id, queue.current, status)
                     else:
-                        print(f"❌ Conversion failed for: {song_data['title'][:50]}")
+                        logging.debug("Conversion failed for: %s", song_data['title'][:50])
                         # Still add the original data as fallback
                         queue = self.get_queue(guild_id)
                         queue.add_processed_song(song_data)
@@ -466,7 +481,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
                     # Regular pre-loaded song
                     queue = self.get_queue(guild_id)
                     queue.add_processed_song(song_data)
-                    print(f"✅ Added pre-loaded song: {song_data.get('title', 'Unknown')[:50]}")
+                    logging.debug("Added pre-loaded song: %s", song_data.get('title', 'Unknown')[:50])
                     guild = self.bot.get_guild(guild_id)
                     vc = guild.voice_client if guild else None
                     status = "playing" if vc and (vc.is_playing() or vc.is_paused()) else "waiting"
@@ -482,18 +497,18 @@ class MusicCog(commands.Cog, name="MusicCog"):
             if song_result:
                 queue = self.get_queue(guild_id)
                 queue.add_processed_song(song_result)
-                print(f"✅ Added searched song: {song_result.get('title', 'Unknown')[:50]}")
+                logging.debug("Added searched song: %s", song_result.get('title', 'Unknown')[:50])
                 guild = self.bot.get_guild(guild_id)
                 vc = guild.voice_client if guild else None
                 status = "playing" if vc and (vc.is_playing() or vc.is_paused()) else "waiting"
                 await self.update_controller_embed(guild_id, queue.current, status)
             else:
-                print(f"❌ No result for: {query}")
+                logging.debug("No result for: %s", query)
 
         except asyncio.TimeoutError:
-            print(f"⏰ Song processing timeout: {query}")
+            logging.debug("Song processing timeout: %s", request.get('query', ''))
         except Exception as e:
-            print(f"❌ Error processing song: {e}")
+            logging.debug("Error processing song: %s", e)
 
     async def _check_and_start_playback(self, voice_client, guild_id: int):
         """Quick playback checker - SINGLE attempt only"""
@@ -501,13 +516,13 @@ class MusicCog(commands.Cog, name="MusicCog"):
         
         # Only check ONCE
         if voice_client.is_playing() or voice_client.is_paused():
-            print("🔍 Already playing/paused, skipping playback check")
+            logging.debug("Already playing/paused, skipping playback check")
             return
         
         # Check if songs are ready
         queue = self.queue_manager.get_queue(guild_id)
         if queue.has_songs():
-            print(f"🚀 Songs ready immediately, starting playback")
+            logging.debug("Songs ready immediately, starting playback")
             await self.playback_manager.start_playback(voice_client, guild_id)
             return
         
@@ -515,11 +530,11 @@ class MusicCog(commands.Cog, name="MusicCog"):
         for i in range(10):  # 5 seconds max
             await asyncio.sleep(0.5)
             if queue.has_songs():
-                print(f"🚀 Songs ready after {i*0.5:.1f}s, starting playback")
+                logging.debug("Songs ready after %.1fs, starting playback", i*0.5)
                 await self.playback_manager.start_playback(voice_client, guild_id)
                 return
         
-        print(f"⏰ No songs ready after 5s")
+        logging.debug("No songs ready after 5s")
 
     async def _ensure_voice_connection(self, message):
         """Ensure voice connection with auto-delete errors and retry logic"""
@@ -551,14 +566,14 @@ class MusicCog(commands.Cog, name="MusicCog"):
         for attempt in range(3):
             try:
                 voice_client = await asyncio.wait_for(channel.connect(), timeout=15.0)
-                print(f"🔗 Connected to {channel.name}")
+                logging.debug("Connected to %s", channel.name)
                 return voice_client
             except Exception as e:
                 error_str = str(e)
-                print(f"❌ Voice connection error (attempt {attempt+1}/3): {error_str}")
+                logging.debug("Voice connection error (attempt %d/3): %s", attempt+1, error_str)
                 if "4006" in error_str or "Session invalidated" in error_str:
                     wait_time = 2 + attempt * 3
-                    print(f"⚠️ Discord voice session invalidated (4006). Retrying in {wait_time}s...")
+                    logging.debug("Discord voice session invalidated (4006). Retrying in %ds…", wait_time)
                     await asyncio.sleep(wait_time)
                 else:
                     error_msg = await message.channel.send(f"❌ Connection failed: {e}")
@@ -573,7 +588,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
         try:
             await self.controller_manager.update_controller_embed(guild_id, song_data, status)
         except Exception as e:
-            print(f"❌ Error updating controller: {e}")
+            logging.debug("Error updating controller: %s", e)
 
     async def handle_play_pause(self, interaction):
         await self.button_handlers.handle_play_pause(interaction)
@@ -622,11 +637,11 @@ class MusicCog(commands.Cog, name="MusicCog"):
             self._last_update[guild_id] = time.time()
         except discord.HTTPException as e:
             if "rate limited" in str(e).lower():
-                print(f"⚠️ Rate limited updating controller, retrying in 5s...")
+                logging.warning("Rate limited updating controller, retrying in 5s...")
                 await asyncio.sleep(5)
                 await self.controller_manager.update_controller_embed(guild_id, song_data, status)
             else:
-                print(f"❌ HTTP error updating controller: {e}")
+                logging.error("HTTP error updating controller: %s", e)
 
     async def cog_unload(self):
         """Cleanup when cog is unloaded"""
@@ -639,8 +654,8 @@ async def setup(bot):
     try:
         cog = MusicCog(bot)
         await bot.add_cog(cog)
-        print(f"✅ MusicCog setup complete: {cog}")
+        logging.info("MusicCog setup complete: %s", cog)
     except Exception as e:
-        print(f"❌ Error setting up MusicCog: {e}")
+        logging.error("Error setting up MusicCog: %s", e)
         traceback.print_exc()
         raise

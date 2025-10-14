@@ -37,7 +37,7 @@ docker compose logs -f
 
 ## Features
 
-- **Modern Controller Embed**: Clean, visually organized music controller embed with banner, thumbnail, and clear fields for queue, next song, volume, and status.
+- **Modern Controller UI**: A welcome banner card (uses your Discord App banner or `BOT_BANNER_URL`), plus a clean controller embed (no image) with clear fields for queue, next song, volume, and status.
 - **Multi-Source Playback**: Play music from YouTube and Spotify, including single tracks and playlists.
 - **Queue Management**: Add, view, shuffle, and manage a queue of tracks.
 - **Autoplay**: Automatically find and play related tracks when the queue ends.
@@ -98,6 +98,7 @@ Permissions note:
 
 - Downloads folder: `src/downloads` (configurable via `Config.DOWNLOADS_DIR`)
 - Files older than 1 day are automatically deleted; we also keep the total under 100 files by removing the oldest if needed.
+- Cache persistence across restarts: by default the cache is preserved. Set `CLEAR_CACHE_ON_START=true` if you want to start fresh each run.
 - Cleanup runs hourly in the background. You can adjust these settings in `utils/file_manager.py` if desired.
 
 ## Step-by-step setup
@@ -197,11 +198,33 @@ Required:
 Optional:
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` — enable Spotify features
 - `YOUTUBE_COOKIES` — (recommended) path to cookies file (e.g., `cookies/youtube.txt`) to help bypass age or regional restrictions and improve reliability
+ - `BOT_BANNER_URL` — optional fallback image/GIF URL for the welcome banner if your Discord App doesn’t have a banner (example: `https://cdn.example.com/banner.gif`)
+ - `CONTROLLER_THUMBNAIL_URL` — optional controller thumbnail image URL (not shown by default; can be enabled later)
+ - `SHOW_BANNER` — show the welcome banner image card (true/false; accepts 1/0, true/false, yes/no, y/n)
+ - `SHOW_CONTROLLER_THUMBNAIL` — show a small thumbnail on controller embeds (true/false; accepts 1/0, true/false, yes/no, y/n)
  - `OWNER_CONTACT` — contact string shown for unauthorized guilds (e.g., Discord handle/ID)
  - `AUTO_RESTART_ENABLED` — enable daily auto-restart (true/false, default true)
  - `AUTO_RESTART_TIME` — time for restart in HH:MM (default 06:00)
  - `AUTO_RESTART_TZ_OFFSET_MINUTES` — timezone offset in minutes (IST=330)
+ - `CLEAR_CACHE_ON_START` — when true, delete all cached audio files on startup; when false (default), keep the cache across restarts
  
+### Hosting your banner image (recommended options)
+
+If your Discord App banner isn’t set or you prefer a custom GIF, set `BOT_BANNER_URL` to a direct image URL. Reliable, no-login choices:
+
+- ImgBB (simple, free):
+   1. Go to https://imgbb.com/
+   2. Upload your image/GIF (leave “expiration” as Don’t autodelete)
+   3. After upload, open the image, choose “Embed codes” or “Links” and copy the Direct link
+       - It must look like `https://i.ibb.co/xxxx/banner.gif` (note the `i.ibb.co` host and file extension)
+   4. Set `BOT_BANNER_URL` in `.env` to that direct link
+
+- GitHub via jsDelivr (immutable + fast CDN):
+   - Commit `assets/banner.gif` to your repo
+   - Use: `https://cdn.jsdelivr.net/gh/<user>/<repo>@<tag-or-commit>/assets/banner.gif`
+
+Tip: Avoid page/album links (they return HTML). You want links ending in `.gif`, `.png`, or `.jpg` with `Content-Type: image/*`.
+
 ## Docker
 
 Build the image and run with Docker Compose (recommended):

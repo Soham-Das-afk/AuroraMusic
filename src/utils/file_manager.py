@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 from config.settings import Config
+import logging
 
 class FileManager:
     """Manage downloaded music files with configurable retention"""
@@ -34,9 +35,9 @@ class FileManager:
                     try:
                         file_path.unlink()
                         deleted_count += 1
-                        print(f"🗑️ Deleted old file: {file_path.name}")
+                        logging.debug("Deleted old file: %s", file_path.name)
                     except Exception as e:
-                        print(f"❌ Error deleting {file_path.name}: {e}")
+                        logging.debug("Error deleting %s: %s", file_path.name, e)
             
             # If still too many files, delete oldest ones
             remaining_files = list(self.downloads_dir.glob("*.mp3"))
@@ -48,15 +49,15 @@ class FileManager:
                     try:
                         file_path.unlink()
                         deleted_count += 1
-                        print(f"🗑️ Deleted excess file: {file_path.name}")
+                        logging.debug("Deleted excess file: %s", file_path.name)
                     except Exception as e:
-                        print(f"❌ Error deleting {file_path.name}: {e}")
+                        logging.debug("Error deleting %s: %s", file_path.name, e)
             
             if deleted_count > 0:
-                print(f"🧹 Cleanup complete: {deleted_count} files deleted")
+                logging.debug("Cleanup complete: %d files deleted", deleted_count)
             
         except Exception as e:
-            print(f"❌ Error during cleanup: {e}")
+            logging.debug("Error during cleanup: %s", e)
     
     def get_storage_info(self):
         """Get storage information"""

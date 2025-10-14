@@ -2,7 +2,9 @@ import discord
 import json
 import asyncio
 import time
+import logging
 from pathlib import Path
+from config.settings import Config
 
 class ControllerManager:
     """Manages music controller embeds"""
@@ -16,24 +18,75 @@ class ControllerManager:
         self._last_banner_fetch = 0.0
 
     async def _get_banner_url(self):
-        """Get and cache the bot banner URL for a short period to avoid frequent API calls."""
+        """Get and cache the application's banner URL (back-compat with banner_url).
+        Adds verbose debug logging to diagnose missing banner issues."""
         try:
             now = time.time()
-            if self._cached_banner_url and (now - self._last_banner_fetch) < 300:  # cache 5 minutes
+            cache_age = now - self._last_banner_fetch
+            if self._cached_banner_url and cache_age < 300:  # cache 5 minutes
+                logging.debug("[BANNER] Using cached banner URL (age=%.1fs): %s", cache_age, self._cached_banner_url)
                 return self._cached_banner_url
 
-            app_info = await self.music_cog.bot.application_info()
             url = None
-            if hasattr(app_info, "banner") and app_info.banner:
-                try:
-                    asset = app_info.banner.replace(size=4096)
-                    url = asset.url
-                except Exception:
-                    url = app_info.banner.url
+
+            # Try application banner using old and new attributes
+            try:
+                logging.debug("[BANNER] Fetching bot application info…")
+                app_info = await self.music_cog.bot.application_info()
+                logging.debug(
+                    "[BANNER] app_info fetched. Has banner_url? %s; Has banner asset? %s",
+                    'banner_url' in dir(app_info), bool(getattr(app_info, 'banner', None))
+                )
+
+                # Old discord.py provided banner_url directly
+                banner_url_attr = getattr(app_info, "banner_url", None)
+                logging.debug("[BANNER] app_info.banner_url = %s", banner_url_attr)
+                if banner_url_attr:
+                    url = banner_url_attr
+
+                # Newer discord.py exposes an Asset at app_info.banner
+                if not url and getattr(app_info, "banner", None):
+                    try:
+                        asset = app_info.banner.replace(size=4096)
+                        url = asset.url
+                        logging.debug("[BANNER] app_info.banner asset url = %s", url)
+                    except Exception:
+                        try:
+                            url = app_info.banner.url
+                            logging.debug("[BANNER] app_info.banner url (no replace) = %s", url)
+                        except Exception:
+                            url = None
+            except Exception as e:
+                logging.debug("[BANNER] Error fetching app_info/banner: %s", e)
+
+            # Fallback to env-provided banner URL if available
+            try:
+                from config.settings import Config  # lazy import to avoid cycles
+                if not url and getattr(Config, 'BOT_BANNER_URL', ''):
+                    env_url = Config.BOT_BANNER_URL
+                    # Normalize common share links (e.g., Google Drive viewer) to direct-view if possible
+                    if 'drive.google.com' in env_url:
+                        try:
+                            # Patterns like: https://drive.google.com/file/d/<id>/view?usp=sharing
+                            marker = '/file/d/'
+                            if marker in env_url:
+                                start = env_url.index(marker) + len(marker)
+                                file_id = env_url[start:].split('/')[0]
+                                env_url = f'https://drive.google.com/uc?export=view&id={file_id}'
+                                logging.debug("[BANNER] Normalized Google Drive URL to direct-view: %s", env_url)
+                        except Exception as norm_err:
+                            logging.debug("[BANNER] Could not normalize Drive URL: %s", norm_err)
+                    url = env_url
+                    logging.debug("[BANNER] Using BOT_BANNER_URL fallback: %s", url)
+            except Exception as env_err:
+                logging.debug("[BANNER] Env fallback error: %s", env_err)
+
             self._cached_banner_url = url
             self._last_banner_fetch = now
+            logging.debug("[BANNER] Final resolved banner URL: %s", self._cached_banner_url)
             return url
         except Exception:
+            logging.exception("[BANNER] Unexpected error resolving banner URL")
             return None
     
     def load_controller_data(self):
@@ -44,7 +97,7 @@ class ControllerManager:
                     return json.load(f)
             return {}
         except Exception as e:
-            print(f"❌ Error loading controller data: {e}")
+            logging.error("Error loading controller data: %s", e)
             return {}
     
     async def update_controller_embed(self, guild_id, song_data=None, status="waiting"):
@@ -76,24 +129,24 @@ class ControllerManager:
             controller_data = self.load_controller_data()
             guild_str = str(guild_id)
             if guild_str not in controller_data:
-                print(f"⚠️ No controller data for guild {guild_id}")
+                logging.debug("No controller data for guild %s", guild_id)
                 return
             message_id = controller_data[guild_str].get("message_id")
             channel_id = controller_data[guild_str].get("channel_id")
             if not message_id or not channel_id:
-                print(f"⚠️ Missing message/channel ID for guild {guild_id}")
+                logging.debug("Missing message/channel ID for guild %s", guild_id)
                 return
             channel = self.music_cog.bot.get_channel(channel_id)
             if not channel:
-                print(f"⚠️ Controller channel not found: {channel_id}")
+                logging.debug("Controller channel not found: %s", channel_id)
                 return
             try:
                 message = await channel.fetch_message(message_id)
             except discord.NotFound:  # type: ignore[attr-defined]
-                print(f"⚠️ Controller message not found: {message_id}")
+                logging.debug("Controller message not found: %s", message_id)
                 return
             except Exception as fetch_error:
-                print(f"❌ Error fetching controller message: {fetch_error}")
+                logging.error("Error fetching controller message: %s", fetch_error)
                 return
             queue = self.music_cog.get_queue(guild_id)
             embed = self.create_controller_embed(song_data, status, queue, bot_banner_url)
@@ -101,21 +154,19 @@ class ControllerManager:
             for attempt in range(max_retries):
                 try:
                     await message.edit(embed=embed)
-                    print(f"✅ Controller updated - Status: {status} (attempt {attempt + 1})")
+                    logging.debug("Controller updated - Status: %s (attempt %d)", status, attempt + 1)
                     break
                 except discord.HTTPException as http_error:  # type: ignore[attr-defined]
-                    print(f"⚠️ HTTP error updating controller (attempt {attempt + 1}): {http_error}")
+                    logging.debug("HTTP error updating controller (attempt %d): %s", attempt + 1, http_error)
                     if attempt < max_retries - 1:
                         await asyncio.sleep(1)
                     else:
-                        print(f"❌ Failed to update controller after {max_retries} attempts")
+                        logging.error("Failed to update controller after %d attempts", max_retries)
                 except Exception as edit_error:
-                    print(f"❌ Error editing controller message: {edit_error}")
+                    logging.error("Error editing controller message: %s", edit_error)
                     break
         except Exception as e:
-            print(f"❌ Error updating controller: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.exception("Error updating controller: %s", e)
 
     def format_duration(self, seconds):
         """Format duration in MM:SS format"""
@@ -196,13 +247,13 @@ Currently streaming high-quality audio
                     status_text += " • 🎵 Spotify"
                 embed.add_field(name="📊 Status", value=status_text, inline=False)
                 
-                # Add thumbnail and banner
-                # Big banner image for consistency with welcome card
-                if bot_banner_url:
-                    try:
-                        embed.set_image(url=bot_banner_url)
-                    except Exception:
-                        embed.set_thumbnail(url=bot_banner_url)
+                # Optional thumbnail if enabled via env
+                try:
+                    if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
+                        embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
+                except Exception:
+                    pass
+
                 # Footer credit
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
@@ -222,12 +273,13 @@ Playback is currently paused
                 loop_status = "Loop On" if queue.loop_mode else "Loop Off"
                 embed.add_field(name="📊 Status", value=f"⏸️ Paused • {loop_status}", inline=True)
                 
-                # Add thumbnail and banner
-                if bot_banner_url:
-                    try:
-                        embed.set_image(url=bot_banner_url)
-                    except Exception:
-                        embed.set_thumbnail(url=bot_banner_url)
+                # Optional thumbnail if enabled via env
+                try:
+                    if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
+                        embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
+                except Exception:
+                    pass
+
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
             elif status == "loading":
@@ -244,12 +296,13 @@ Please wait while we prepare your music
                 embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
                 embed.add_field(name="📋 Queue", value=f"{queue.total_items()} items", inline=True)
                 
-                # Add thumbnail and banner
-                if bot_banner_url:
-                    try:
-                        embed.set_image(url=bot_banner_url)
-                    except Exception:
-                        embed.set_thumbnail(url=bot_banner_url)
+                # Optional thumbnail if enabled via env
+                try:
+                    if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
+                        embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
+                except Exception:
+                    pass
+
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
             else:
@@ -278,17 +331,9 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
                 status_text = "🔴 Stopped"
                 embed.add_field(name="📊 Status", value=status_text, inline=False)
                 
-                # Add thumbnail and banner
-                if bot_banner_url:
-                    try:
-                        embed.set_image(url=bot_banner_url)
-                    except Exception:
-                        embed.set_thumbnail(url=bot_banner_url)
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
             
             return embed
         except Exception as e:
-            print(f"❌ Error creating embed: {e}")
-            import traceback
-            traceback.print_exc()
+            logging.exception("Error creating controller embed: %s", e)
             return discord.Embed(title="Error", description="Failed to create embed", color=0xff0000)  # type: ignore[attr-defined]

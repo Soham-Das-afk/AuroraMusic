@@ -4,6 +4,7 @@ import asyncio
 import re
 import time
 import traceback
+import logging
 from spotipy.oauth2 import SpotifyClientCredentials
 from typing import Optional, Tuple, List, Dict, Any
 from .base import AudioSource
@@ -32,7 +33,7 @@ class SpotifyHandler(AudioSource):
     def _initialize_spotify(self):
         """Initialize Spotify client with error handling"""
         if not Config.SPOTIFY_CLIENT_ID or not Config.SPOTIFY_CLIENT_SECRET:
-            print("⚠️ Spotify credentials not configured")
+            logging.warning("Spotify credentials not configured")
             return
         
         try:
@@ -41,9 +42,9 @@ class SpotifyHandler(AudioSource):
                 client_secret=Config.SPOTIFY_CLIENT_SECRET
             )
             self.spotify = spotipy.Spotify(client_credentials_manager=credentials)
-            print("✅ Spotify client initialized")
+            logging.info("Spotify client initialized")
         except Exception as e:
-            print(f"❌ Spotify initialization failed: {e}")
+            logging.error("Spotify initialization failed: %s", e)
             self.spotify = None
     
     def is_url_supported(self, url: str) -> bool:
@@ -70,7 +71,7 @@ class SpotifyHandler(AudioSource):
                     spotify_id = parts[2]
                     return content_type, spotify_id
         except Exception as e:
-            print(f"❌ Error extracting Spotify ID: {e}")
+            logging.error("Error extracting Spotify ID: %s", e)
         
         return None, None
     
@@ -118,7 +119,7 @@ class SpotifyHandler(AudioSource):
                 artist_str = ', '.join(artists)
 
             except Exception as artist_error:
-                print(f"⚠️ Artist processing error: {artist_error}")
+                logging.warning("Artist processing error: %s", artist_error)
                 artists = ['Unknown Artist']
                 artist_str = 'Unknown Artist'
 
@@ -134,20 +135,20 @@ class SpotifyHandler(AudioSource):
                 'source': 'spotify'
             }
         except Exception as e:
-            print(f"❌ Error getting Spotify track: {e}")
+            logging.error("Error getting Spotify track: %s", e)
             return None
 
     async def search(self, query: str):
         """Search for a single Spotify track - REQUIRED ABSTRACT METHOD"""
         try:
             if not self.spotify:
-                print("❌ Spotify client not available")
+                logging.error("Spotify client not available")
                 return None
 
             content_type, spotify_id = self.extract_spotify_id(query)
 
             if content_type != 'track' or not spotify_id:
-                print(f"❌ Expected track, got {content_type}")
+                logging.error("Expected track, got %s", content_type)
                 return None
 
             # Get Spotify track info
@@ -157,21 +158,21 @@ class SpotifyHandler(AudioSource):
             )
 
             if not track_info:
-                print("❌ Failed to get Spotify track info")
+                logging.error("Failed to get Spotify track info")
                 return None
 
             # Convert to YouTube
             if self.youtube is not None:
                 return await self.search_youtube_for_track(track_info)
             else:
-                print("❌ YouTube handler not available")
+                logging.error("YouTube handler not available")
                 return None
 
         except asyncio.TimeoutError:
-            print("⏰ Spotify search timeout")
+            logging.warning("Spotify search timeout")
             return None
         except Exception as e:
-            print(f"❌ Spotify search error: {e}")
+            logging.error("Spotify search error: %s", e)
             return None
 
     async def get_playlist_info(self, playlist_id: str):
@@ -182,7 +183,7 @@ class SpotifyHandler(AudioSource):
 
             loop = asyncio.get_event_loop()
 
-            print(f"🚀 [SPOTIFY PLAYLIST] Starting fast extraction: {playlist_id}")
+            logging.info("[SPOTIFY PLAYLIST] Starting fast extraction: %s", playlist_id)
 
             try:
                 # Get playlist metadata quickly
@@ -192,17 +193,17 @@ class SpotifyHandler(AudioSource):
                 )
 
                 if not playlist:
-                    print(f"❌ [SPOTIFY PLAYLIST] Playlist returned None: {playlist_id}")
+                    logging.error("[SPOTIFY PLAYLIST] Playlist returned None: %s", playlist_id)
                     return None, []
 
             except Exception as api_error:
-                print(f"❌ [SPOTIFY PLAYLIST] API Error: {api_error}")
+                logging.error("[SPOTIFY PLAYLIST] API Error: %s", api_error)
                 return None, []
 
             total_tracks = playlist['tracks']['total']
 
             if total_tracks == 0:
-                print(f"❌ [SPOTIFY PLAYLIST] Playlist is empty: {playlist_id}")
+                logging.error("[SPOTIFY PLAYLIST] Playlist is empty: %s", playlist_id)
                 return None, []
 
             playlist_info = {
@@ -213,7 +214,7 @@ class SpotifyHandler(AudioSource):
                 'public': playlist.get('public', False)
             }
 
-            print(f"🚀 [SPOTIFY PLAYLIST] Found {total_tracks} tracks in '{playlist['name']}'")
+            logging.info("[SPOTIFY PLAYLIST] Found %d tracks in '%s'", total_tracks, playlist['name'])
 
             # ✅ EXTRACT ALL TRACKS QUICKLY
             tracks = []
@@ -261,20 +262,19 @@ class SpotifyHandler(AudioSource):
 
                 # Progress update
                 if len(tracks) % 50 == 0 and len(tracks) > 0:
-                    print(f"🚀 [SPOTIFY PLAYLIST] Processed {len(tracks)}/{total_tracks} tracks...")
+                    logging.info("[SPOTIFY PLAYLIST] Processed %d/%d tracks...", len(tracks), total_tracks)
 
             playlist_info['valid_songs'] = len(tracks)
 
             if len(tracks) == 0:
-                print(f"❌ [SPOTIFY PLAYLIST] No playable tracks found in playlist")
+                logging.error("[SPOTIFY PLAYLIST] No playable tracks found in playlist")
                 return None, []
 
-            print(f"🚀 [SPOTIFY PLAYLIST] Completed: {len(tracks)} playable tracks extracted")
+            logging.info("[SPOTIFY PLAYLIST] Completed: %d playable tracks extracted", len(tracks))
             return playlist_info, tracks
 
         except Exception as e:
-            print(f"❌ [SPOTIFY PLAYLIST] Unexpected error: {e}")
-            traceback.print_exc()
+            logging.exception("[SPOTIFY PLAYLIST] Unexpected error: %s", e)
             return None, []
 
     async def search_youtube_for_track(self, spotify_track: dict):
@@ -313,7 +313,7 @@ class SpotifyHandler(AudioSource):
             else:
                 return None
         except Exception as e:
-            print(f"❌ Error converting Spotify song: {e}")
+            logging.error("Error converting Spotify song: %s", e)
             return None
 
     async def search_playlist(self, playlist_url: str):
@@ -322,10 +322,10 @@ class SpotifyHandler(AudioSource):
             content_type, spotify_id = self.extract_spotify_id(playlist_url)
 
             if content_type not in ['playlist', 'album'] or not spotify_id:
-                print(f"❌ [SPOTIFY PLAYLIST] Invalid content type: {content_type}")
+                logging.error("[SPOTIFY PLAYLIST] Invalid content type: %s", content_type)
                 return None, []
 
-            print(f"🚀 [SPOTIFY PLAYLIST] Starting fast processing: {playlist_url}")
+            logging.info("[SPOTIFY PLAYLIST] Starting fast processing: %s", playlist_url)
             start_time = time.time()
 
             # ✅ STEP 1: Fast metadata extraction only
@@ -335,18 +335,18 @@ class SpotifyHandler(AudioSource):
                     timeout=15.0  # Reduced timeout for faster response
                 )
             except asyncio.TimeoutError:
-                print(f"❌ [SPOTIFY PLAYLIST] Timeout processing playlist")
+                logging.error("[SPOTIFY PLAYLIST] Timeout processing playlist")
                 return None, []
             except Exception as extraction_error:
-                print(f"❌ [SPOTIFY PLAYLIST] Extraction error: {extraction_error}")
+                logging.error("[SPOTIFY PLAYLIST] Extraction error: %s", extraction_error)
                 return None, []
 
             if not spotify_tracks:
-                print(f"❌ [SPOTIFY PLAYLIST] No valid tracks found")
+                logging.error("[SPOTIFY PLAYLIST] No valid tracks found")
                 return None, []
 
             extraction_time = time.time() - start_time
-            print(f"🚀 [SPOTIFY PLAYLIST] Metadata extracted in {extraction_time:.2f}s")
+            logging.info("[SPOTIFY PLAYLIST] Metadata extracted in %.2fs", extraction_time)
 
             # ✅ STEP 2: Create queue entries WITHOUT YouTube conversion
             songs = []
@@ -375,14 +375,13 @@ class SpotifyHandler(AudioSource):
                 })
 
             total_time = time.time() - start_time
-            print(f"🚀 [SPOTIFY PLAYLIST] Fast processing complete: {len(songs)} songs queued in {total_time:.2f}s")
-            print(f"🎵 Songs will be converted to YouTube during playback")
+            logging.info("[SPOTIFY PLAYLIST] Fast processing complete: %d songs queued in %.2fs", len(songs), total_time)
+            logging.info("Songs will be converted to YouTube during playback")
 
             return playlist_info, songs
 
         except Exception as e:
-            print(f"❌ [SPOTIFY PLAYLIST] Error: {e}")
-            traceback.print_exc()
+            logging.exception("[SPOTIFY PLAYLIST] Error: %s", e)
             return None, []
     
     async def cleanup(self):

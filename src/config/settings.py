@@ -26,6 +26,14 @@ class Config:
     YOUTUBE_COOKIES = os.getenv('YOUTUBE_COOKIES', '')
     # Optional owner contact to display in unauthorized guild message
     OWNER_CONTACT = os.getenv('OWNER_CONTACT', '').strip()
+    # Optional: Fallback banner/thumbnail URLs from environment
+    BOT_BANNER_URL = os.getenv('BOT_BANNER_URL', '').strip()
+    CONTROLLER_THUMBNAIL_URL = os.getenv('CONTROLLER_THUMBNAIL_URL', '').strip()
+    # Display toggles (true/false)
+    SHOW_BANNER = os.getenv('SHOW_BANNER', 'true').strip().lower() in ('1', 'true', 'yes', 'y')
+    SHOW_CONTROLLER_THUMBNAIL = os.getenv('SHOW_CONTROLLER_THUMBNAIL', 'false').strip().lower() in ('1', 'true', 'yes', 'y')
+    # Caching behavior
+    CLEAR_CACHE_ON_START = os.getenv('CLEAR_CACHE_ON_START', 'false').strip().lower() in ('1', 'true', 'yes', 'y')
     
     # Paths
     BASE_DIR = Path(__file__).parent.parent
@@ -182,6 +190,13 @@ class Config:
         if not cookies_path:
             logging.warning("⚠️ No YouTube cookies - private videos may fail")
         
+        if cls.BOT_BANNER_URL:
+            logging.info("🖼️ Using BOT_BANNER_URL from environment for banner fallback")
+        if cls.CONTROLLER_THUMBNAIL_URL:
+            logging.info("🖼️ CONTROLLER_THUMBNAIL_URL set in environment")
+        logging.info(f"🧩 SHOW_BANNER={cls.SHOW_BANNER} | SHOW_CONTROLLER_THUMBNAIL={cls.SHOW_CONTROLLER_THUMBNAIL}")
+        logging.info(f"💾 CLEAR_CACHE_ON_START={cls.CLEAR_CACHE_ON_START}")
+
         logging.info(f"✅ Configuration validated (Spotify: {has_spotify})")
         return True
     

@@ -8,6 +8,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from config.settings import Config
+from utils.file_manager import FileManager
 
 class SafeConsoleFilter(logging.Filter):
     """Sanitize log records for consoles that can't render emojis/UTF-8."""
@@ -123,6 +124,25 @@ class AuroraMusicBot(commands.Bot):
                 name="🎵 music | /help"
             )
         )
+
+        # Optionally purge cached songs on restart (controlled by env)
+        try:
+            if getattr(Config, 'CLEAR_CACHE_ON_START', False):
+                fm = FileManager()
+                downloads_dir = fm.downloads_dir
+                deleted = 0
+                for f in downloads_dir.glob('*.mp3'):
+                    try:
+                        f.unlink()
+                        deleted += 1
+                    except Exception as e:
+                        logging.debug(f"Could not delete cached file {f.name}: {e}")
+                if deleted:
+                    logging.info(f"🧹 Purged {deleted} cached audio file(s) on startup (CLEAR_CACHE_ON_START)")
+            else:
+                logging.info("💾 Skipping startup cache purge (CLEAR_CACHE_ON_START=false)")
+        except Exception as e:
+            logging.debug(f"Startup cache purge skipped: {e}")
 
         # Schedule daily auto-restart based on configuration
         # Ensure we only schedule this once per process
@@ -316,7 +336,7 @@ class AuroraMusicBot(commands.Bot):
                 logging.info(f"🎵 [CONTROLLER] Processing music request: {content}")
                 music_cog = self.get_cog('MusicCog')
                 if music_cog and hasattr(music_cog, 'handle_song_request'):
-                    await music_cog.handle_song_request(message, content)
+                    await music_cog.handle_song_request(message, content)  # type: ignore[attr-defined]
                 else:
                     logging.error("❌ [CONTROLLER] MusicCog not available!")
                     # Best-effort delete to keep controller clean
@@ -344,7 +364,7 @@ class AuroraMusicBot(commands.Bot):
                 if before.channel and self.user in before.channel.members:
                     voice_client = get(self.voice_clients, channel=before.channel)
                     if voice_client:
-                        await voice_client.disconnect()
+                        await voice_client.disconnect(force=False)
                         logging.info(f"🔌 Disconnected from {before.channel.name} (alone)")
 
     async def on_command_error(self, ctx, error):
@@ -376,7 +396,8 @@ async def main():
         # Use the correct intents attribute for message events
         intents.messages = True
         bot = AuroraMusicBot(intents=intents)
-        await bot.start(Config.BOT_TOKEN)
+        token = Config.BOT_TOKEN or ""
+        await bot.start(token)
     except KeyboardInterrupt:
         logging.info("🛑 Bot stopped by user")
     except Exception as e:

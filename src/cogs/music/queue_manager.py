@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 import random
 import time
+import logging
 
 # ✅ Add metadata cache to MusicQueue
 class MusicQueue:
@@ -12,6 +13,7 @@ class MusicQueue:
         self.processed_queue = deque()  # Processed, ready-to-play songs
         self.history = deque(maxlen=10)
         self.current = None
+        self.prefer_file_once = False  # Use local file for next start if available
         self.volume = 100
         self.loop_mode = False
         self.position = 0
@@ -38,7 +40,7 @@ class MusicQueue:
         
         query = request_data.get('query', 'Unknown')
         order = request_data.get('order', '?')
-        print(f"📋 [QUEUE] Added request #{order}: {query[:30]}")
+        logging.debug("[QUEUE] Added request #%s: %s", order, query[:30])
     
     def add_processed_song(self, song_data):
         """Add a processed song to the ready queue"""
@@ -51,28 +53,28 @@ class MusicQueue:
             # Avoid duplicate entries in history
             if not self.history or self.history[-1].get('id') != self.current.get('id'):
                 self.history.append(self.current)
-                print(f"📝 Added to history: {self.current.get('title', 'Unknown')}")
+                logging.debug("Added to history: %s", self.current.get('title', 'Unknown'))
             else:
-                print(f"📝 Song already in history, skipping: {self.current.get('title', 'Unknown')}")
+                logging.debug("Song already in history, skipping: %s", self.current.get('title', 'Unknown'))
 
         if self.processed_queue:
             self.current = self.processed_queue.popleft()
-            print(f"🎵 Now current: {self.current.get('title', 'Unknown')}")
+            logging.debug("Now current: %s", self.current.get('title', 'Unknown'))
             return self.current
         else:
             self.current = None
-            print("📭 No more songs in queue")
+            logging.debug("No more songs in queue")
         return None
         
     def get_previous(self):
         """Get previous song - IMPROVED VERSION"""
         if not self.history:
-            print("📭 No previous songs in history")
+            logging.debug("No previous songs in history")
             return None
         
         # ✅ FIXED: Don't add current to processed_queue if it's None
         if self.current and self.current.get('title'):
-            print(f"🔄 Moving current song back to front: {self.current.get('title', 'Unknown')}")
+            logging.debug("Moving current song back to front: %s", self.current.get('title', 'Unknown'))
             self.processed_queue.appendleft(self.current)
         
         # ✅ Get the last song from history
@@ -80,7 +82,7 @@ class MusicQueue:
         
         # ✅ CRITICAL: Set this as current immediately
         self.current = previous_song
-        print(f"⏮️ Retrieved previous: {previous_song.get('title', 'Unknown')}")
+        logging.debug("Retrieved previous: %s", previous_song.get('title', 'Unknown'))
         
         return self.current
 
@@ -90,18 +92,18 @@ class MusicQueue:
             # Avoid duplicates
             if not self.history or self.history[-1].get('id') != song_data.get('id'):
                 self.history.append(song_data)
-                print(f"📝 Manually added to history: {song_data.get('title', 'Unknown')}")
+                logging.debug("Manually added to history: %s", song_data.get('title', 'Unknown'))
         
     def clear(self):
         """Clear all queues"""
         if self.current:
-            print(f"🗑️ Clearing current song: {self.current.get('title', 'Unknown')}")
+            logging.debug("Clearing current song: %s", self.current.get('title', 'Unknown'))
     
         self.queue.clear()
         self.processed_queue.clear()
         self.current = None
         self.cache.clear()
-        print("🗑️ All queues cleared")
+        logging.debug("All queues cleared")
         
     def shuffle(self):
         """Shuffle processed queue"""

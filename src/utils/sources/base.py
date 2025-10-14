@@ -4,7 +4,9 @@ import asyncio
 import re
 import time  # ✅ ADD IF MISSING
 import traceback  # ✅ ADD IF MISSING
+import logging
 from abc import ABC, abstractmethod
+from typing import Optional, Dict, Any, Tuple, List
 from pathlib import Path
 from config.settings import Config
 
@@ -16,12 +18,12 @@ class AudioSource(ABC):
         self.session = None
     
     @abstractmethod
-    async def search(self, query: str):
+    async def search(self, query: str) -> Optional[Dict[str, Any]]:
         """Search for audio content"""
         pass
     
     @abstractmethod
-    async def search_playlist(self, playlist_url: str):
+    async def search_playlist(self, playlist_url: str) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
         """Search for playlist content"""
         pass
     
@@ -97,7 +99,7 @@ class BaseDownloader:
             
             return True
         except Exception as e:
-            print(f"❌ Error validating file: {e}")
+            logging.debug("Error validating file: %s", e)
             return False
 
 class PlaylistSource(ABC):

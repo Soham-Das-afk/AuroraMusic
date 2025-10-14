@@ -2,6 +2,7 @@ import discord
 import asyncio
 import traceback
 import time
+import logging
 from typing import Optional
 from utils.sources.youtube import YTDLSource
 
@@ -29,15 +30,18 @@ class VolumeModal(discord.ui.Modal, title='Set Volume'):
                 )
                 return
             
+            if not interaction.guild:
+                await interaction.response.send_message("❌ Not in a guild", ephemeral=True)
+                return
+
             queue = self.music_cog.get_queue(interaction.guild.id)
             old_volume = queue.volume
             queue.set_volume(volume_value)
             
             # Update controller
             await self.music_cog.update_controller_embed(
-                interaction.guild.id, queue.current, 
-                "playing" if interaction.guild.voice_client and 
-                interaction.guild.voice_client.is_playing() else "waiting"
+                interaction.guild.id, queue.current,
+                "playing" if getattr(interaction.guild, 'voice_client', None) and getattr(interaction.guild.voice_client, 'is_playing', lambda: False)() else "waiting"
             )
             
             await interaction.response.send_message(
@@ -50,7 +54,7 @@ class VolumeModal(discord.ui.Modal, title='Set Volume'):
                 "❌ Please enter a valid number (10-200)", ephemeral=True
             )
         except Exception as e:
-            print(f"❌ Error in volume modal: {e}")
+            logging.debug("Error in volume modal: %s", e)
             await interaction.response.send_message(
                 "❌ Volume change failed", ephemeral=True
             )
@@ -80,7 +84,7 @@ class ButtonHandlers:
         """Record button error for monitoring"""
         self._error_counts[button_type] = self._error_counts.get(button_type, 0) + 1
         if self._error_counts[button_type] > 10:
-            print(f"⚠️ High error count for {button_type}: {self._error_counts[button_type]}")
+            logging.debug("High error count for %s: %s", button_type, self._error_counts[button_type])
     
     async def handle_play_pause(self, interaction):
         """Enhanced play/pause with state validation"""
@@ -120,7 +124,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("play_pause")
-            print(f"❌ Play/Pause error: {e}")
+            logging.debug("Play/Pause error: %s", e)
             try:
                 msg = await interaction.followup.send("❌ Play/Pause failed!", ephemeral=True)
                 await self._auto_delete_message(msg, 3)
@@ -145,7 +149,7 @@ class ButtonHandlers:
             current_title = queue.current.get('title', 'Unknown') if queue.current else 'Unknown'
             
             # ✅ CRITICAL: Mark as manual operation BEFORE stopping
-            print(f"🔍 [SKIP DEBUG] Marking guild {interaction.guild.id} as manual operation")
+            logging.debug("[SKIP] Marking guild %s as manual operation", interaction.guild.id)
             self.music_cog.playback_manager._manual_operations.add(interaction.guild.id)
             
             # ✅ Stop playback (this triggers song_finished)
@@ -155,7 +159,7 @@ class ButtonHandlers:
             
         except Exception as e:
             self._record_error("skip")
-            print(f"❌ Skip error: {e}")
+            logging.debug("Skip error: %s", e)
             # ✅ Clear manual flag on error
             self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
             try:
@@ -195,7 +199,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("stop")
-            print(f"❌ Stop error: {e}")
+            logging.debug("Stop error: %s", e)
             try:
                 await self.music_cog.update_controller_embed(interaction.guild.id, None, "waiting")
                 msg = await interaction.followup.send("❌ Stop failed!", ephemeral=True)
@@ -223,8 +227,8 @@ class ButtonHandlers:
                 await interaction.followup.send("❌ No previous song available!", ephemeral=True)
                 return
             
-            print(f"🔍 [PREVIOUS DEBUG] History size: {len(queue.history)}")
-            print(f"🔍 [PREVIOUS DEBUG] Current song: {queue.current.get('title', 'None') if queue.current else 'None'}")
+            logging.debug("[PREVIOUS] History size: %d", len(queue.history))
+            logging.debug("[PREVIOUS] Current song: %s", queue.current.get('title', 'None') if queue.current else 'None')
             
             # ✅ CRITICAL FIX: Mark as manual operation to prevent auto-advance conflicts
             self.music_cog.playback_manager._manual_operations.add(interaction.guild.id)
@@ -237,7 +241,7 @@ class ButtonHandlers:
                     await interaction.followup.send("❌ No previous song available!", ephemeral=True)
                     return
                 
-                print(f"⏮️ Previous song retrieved: {previous_song.get('title', 'Unknown')}")
+                logging.debug("Previous song retrieved: %s", previous_song.get('title', 'Unknown'))
                 
                 # ✅ FIXED: Stop current playback and wait
                 voice_client.stop()
@@ -247,7 +251,12 @@ class ButtonHandlers:
                 await asyncio.sleep(0.5)
                 self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
                 
-                # ✅ Use playback manager to start the previous song
+                # ✅ Use playback manager to start the previous song (prefer local cached file)
+                # Set a transient flag on queue; start_playback will consume it
+                try:
+                    queue.prefer_file_once = True
+                except Exception:
+                    queue.prefer_file_once = False
                 success = await self.music_cog.playback_manager.start_playback(voice_client, interaction.guild.id)
                 
                 if success:
@@ -262,7 +271,7 @@ class ButtonHandlers:
     
         except Exception as e:
             self._record_error("previous")
-            print(f"❌ Previous error: {e}")
+            logging.debug("Previous error: %s", e)
             import traceback
             traceback.print_exc()
             # Clear manual operation flag on error
@@ -290,7 +299,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("shuffle")
-            print(f"❌ Shuffle error: {e}")
+            logging.debug("Shuffle error: %s", e)
             try:
                 await interaction.followup.send("❌ Shuffle failed!", ephemeral=True)
             except:
@@ -303,7 +312,7 @@ class ButtonHandlers:
             
         except Exception as e:
             self._record_error("volume")
-            print(f"❌ Volume error: {e}")
+            logging.debug("Volume error: %s", e)
             try:
                 await interaction.response.send_message("❌ Volume control failed!", ephemeral=True)
             except:
@@ -331,7 +340,7 @@ class ButtonHandlers:
             
         except Exception as e:
             self._record_error("loop")
-            print(f"❌ Loop error: {e}")
+            logging.debug("Loop error: %s", e)
             try:
                 await interaction.followup.send("❌ Loop toggle failed!", ephemeral=True)
             except:
@@ -368,7 +377,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("rewind")
-            print(f"❌ Rewind error: {e}")
+            logging.debug("Rewind error: %s", e)
             try:
                 await interaction.followup.send("❌ Rewind failed!", ephemeral=True)
             except:
@@ -410,7 +419,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("forward")
-            print(f"❌ Forward error: {e}")
+            logging.debug("Forward error: %s", e)
             try:
                 await interaction.followup.send("❌ Forward failed!", ephemeral=True)
             except:
@@ -423,12 +432,12 @@ class ButtonHandlers:
                 await asyncio.sleep(delay)
                 if message:
                     await message.delete()
-                    print(f"✅ Auto-deleted button response after {delay}s")
+                    logging.debug("Auto-deleted button response after %ds", delay)
             except discord.NotFound:
-                print("⚠️ Button response already deleted")
+                logging.debug("Button response already deleted")
             except discord.Forbidden:
-                print("⚠️ No permission to delete button response")
+                logging.debug("No permission to delete button response")
             except Exception as e:
-                print(f"⚠️ Error auto-deleting button response: {e}")
+                logging.debug("Error auto-deleting button response: %s", e)
         
         asyncio.create_task(delete_task())
