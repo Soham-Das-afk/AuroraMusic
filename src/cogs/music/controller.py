@@ -12,6 +12,29 @@ class ControllerManager:
         self.controller_data_file = Path(__file__).parent.parent.parent / "data" / "controller_data.json"
         self._update_tasks = {}  # Track pending updates
         self._last_update = {}   # Track last update time
+        self._cached_banner_url = None
+        self._last_banner_fetch = 0.0
+
+    async def _get_banner_url(self):
+        """Get and cache the bot banner URL for a short period to avoid frequent API calls."""
+        try:
+            now = time.time()
+            if self._cached_banner_url and (now - self._last_banner_fetch) < 300:  # cache 5 minutes
+                return self._cached_banner_url
+
+            app_info = await self.music_cog.bot.application_info()
+            url = None
+            if hasattr(app_info, "banner") and app_info.banner:
+                try:
+                    asset = app_info.banner.replace(size=4096)
+                    url = asset.url
+                except Exception:
+                    url = app_info.banner.url
+            self._cached_banner_url = url
+            self._last_banner_fetch = now
+            return url
+        except Exception:
+            return None
     
     def load_controller_data(self):
         """Load controller data from JSON"""
@@ -30,15 +53,8 @@ class ControllerManager:
         if guild_id in self._update_tasks:
             self._update_tasks[guild_id].cancel()
         
-        # Fetch banner in async context
-        bot_banner_url = None
-        try:
-            app_info = await self.music_cog.bot.application_info()
-            # discord.py exposes banner as an Asset with .url when present
-            if hasattr(app_info, "banner") and app_info.banner:
-                bot_banner_url = app_info.banner.url
-        except Exception:
-            bot_banner_url = None
+        # Fetch banner in async context (cached)
+        bot_banner_url = await self._get_banner_url()
 
         # Create new update task with small delay, pass banner
         self._update_tasks[guild_id] = asyncio.create_task(
@@ -73,7 +89,7 @@ class ControllerManager:
                 return
             try:
                 message = await channel.fetch_message(message_id)
-            except discord.NotFound:
+            except discord.NotFound:  # type: ignore[attr-defined]
                 print(f"⚠️ Controller message not found: {message_id}")
                 return
             except Exception as fetch_error:
@@ -87,7 +103,7 @@ class ControllerManager:
                     await message.edit(embed=embed)
                     print(f"✅ Controller updated - Status: {status} (attempt {attempt + 1})")
                     break
-                except discord.HTTPException as http_error:
+                except discord.HTTPException as http_error:  # type: ignore[attr-defined]
                     print(f"⚠️ HTTP error updating controller (attempt {attempt + 1}): {http_error}")
                     if attempt < max_retries - 1:
                         await asyncio.sleep(1)
@@ -124,7 +140,7 @@ class ControllerManager:
             # If you want banner, pass it in from async context
 
             if song_data and status == "playing":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="🎵 Now Playing",
                     description=f"""
 **{song_data.get('title', 'Unknown Title')}**
@@ -191,7 +207,7 @@ Currently streaming high-quality audio
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
             elif song_data and status == "paused":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏸️ Paused",
                     description=f"""
 **{song_data.get('title', 'Unknown Title')}**
@@ -215,7 +231,7 @@ Playback is currently paused
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
             elif status == "loading":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏳ Loading...",
                     description=f"""
 **{song_data.get('title', 'Loading...') if song_data else 'Preparing audio...'}**
@@ -237,7 +253,7 @@ Please wait while we prepare your music
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
                 
             else:
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="🎵 AuroraMusic Controller",
                     description="""
 **No music playing**
@@ -275,4 +291,4 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
             print(f"❌ Error creating embed: {e}")
             import traceback
             traceback.print_exc()
-            return discord.Embed(title="Error", description="Failed to create embed", color=0xff0000)
+            return discord.Embed(title="Error", description="Failed to create embed", color=0xff0000)  # type: ignore[attr-defined]

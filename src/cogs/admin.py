@@ -1,11 +1,16 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
+import discord  # type: ignore
+from discord.ext import commands  # type: ignore
+from discord import app_commands  # type: ignore
 import json
 import os
 import traceback
 from pathlib import Path
 import time
+from .music.controller import ControllerManager
+from typing import Any, cast
+
+# Help type checker: treat discord as Any to avoid attr-not-found noise while keeping runtime intact
+discord = cast(Any, discord)
 
 # Controller data storage
 CONTROLLER_DATA_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'controller_data.json')
@@ -29,13 +34,13 @@ def save_controller_data(data):
     except Exception as e:
         print(f"Error saving controller data: {e}")
 
-class MusicControlView(discord.ui.View):
+class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
     def __init__(self):
         super().__init__(timeout=None)
         print("🎛️ MusicControlView initialized with debug logging")
 
-    @discord.ui.button(emoji='⏮️', label='Previous', style=discord.ButtonStyle.secondary, custom_id='music_previous', row=0)
-    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏮️', label='Previous', style=discord.ButtonStyle.secondary, custom_id='music_previous', row=0)  # type: ignore[attr-defined]
+    async def previous(self, interaction: Any, button: Any):
         print(f"🔍 [DEBUG] Previous button clicked by {interaction.user}")
         try:
             music_cog = interaction.client.get_cog('MusicCog')
@@ -51,12 +56,23 @@ class MusicControlView(discord.ui.View):
             except Exception as e2:
                 print(f"❌ Failed to send error message: {e2}")
 
-    @discord.ui.button(emoji='⏸️', label='Resume', style=discord.ButtonStyle.primary, custom_id='music_play_pause', row=0)
-    async def play_pause(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏯️', label='Play/Pause', style=discord.ButtonStyle.primary, custom_id='music_play_pause', row=0)  # type: ignore[attr-defined]
+    async def play_pause(self, interaction: Any, button: Any):
         print(f"🔍 [DEBUG] Play/Pause button clicked by {interaction.user}")
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_play_pause'):
+                # Update label based on current state
+                vc = interaction.guild.voice_client if interaction.guild else None
+                if vc and vc.is_playing():
+                    button.label = 'Pause'
+                    button.emoji = '⏸️'
+                elif vc and vc.is_paused():
+                    button.label = 'Resume'
+                    button.emoji = '▶️'
+                else:
+                    button.label = 'Play'
+                    button.emoji = '▶️'
                 await music_cog.handle_play_pause(interaction)
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
@@ -68,8 +84,8 @@ class MusicControlView(discord.ui.View):
             except Exception as e2:
                 print(f"❌ Failed to send error message: {e2}")
 
-    @discord.ui.button(emoji='⏭️', label='Skip', style=discord.ButtonStyle.secondary, custom_id='music_skip', row=0)
-    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏭️', label='Skip', style=discord.ButtonStyle.secondary, custom_id='music_skip', row=0)  # type: ignore[attr-defined]
+    async def skip(self, interaction: Any, button: Any):
         print(f"🔍 [BUTTON DEBUG] Skip button triggered!")
         try:
             music_cog = interaction.client.get_cog('MusicCog')
@@ -81,8 +97,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='⏹️', label='Stop', style=discord.ButtonStyle.danger, custom_id='music_stop', row=0)
-    async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏹️', label='Stop', style=discord.ButtonStyle.danger, custom_id='music_stop', row=0)  # type: ignore[attr-defined]
+    async def stop(self, interaction: Any, button: Any):
         print(f"🔍 [DEBUG] Stop button clicked by {interaction.user}")
         try:
             music_cog = interaction.client.get_cog('MusicCog')
@@ -98,8 +114,8 @@ class MusicControlView(discord.ui.View):
             except Exception as e2:
                 print(f"❌ Failed to send error message: {e2}")
 
-    @discord.ui.button(emoji='⏪', label='Rewind 10s', style=discord.ButtonStyle.primary, custom_id='music_rewind', row=1)
-    async def rewind(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏪', label='Rewind 10s', style=discord.ButtonStyle.primary, custom_id='music_rewind', row=1)  # type: ignore[attr-defined]
+    async def rewind(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_rewind'):
@@ -110,8 +126,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception in rewind button: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='⏩', label='Forward 10s', style=discord.ButtonStyle.primary, custom_id='music_forward', row=1)
-    async def forward(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='⏩', label='Forward 10s', style=discord.ButtonStyle.primary, custom_id='music_forward', row=1)  # type: ignore[attr-defined]
+    async def forward(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_forward'):
@@ -122,8 +138,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception in forward button: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='🔊', label='Volume', style=discord.ButtonStyle.secondary, custom_id='music_volume', row=1)
-    async def volume(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='🔊', label='Volume', style=discord.ButtonStyle.secondary, custom_id='music_volume', row=1)  # type: ignore[attr-defined]
+    async def volume(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_volume'):
@@ -134,8 +150,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception in volume button: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='🔁', label='Loop', style=discord.ButtonStyle.secondary, custom_id='music_loop', row=2)
-    async def loop_mode(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='🔁', label='Loop', style=discord.ButtonStyle.secondary, custom_id='music_loop', row=2)  # type: ignore[attr-defined]
+    async def loop_mode(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_loop'):
@@ -146,8 +162,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception in loop button: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='🔀', label='Shuffle', style=discord.ButtonStyle.secondary, custom_id='music_shuffle', row=2)
-    async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='🔀', label='Shuffle', style=discord.ButtonStyle.secondary, custom_id='music_shuffle', row=2)  # type: ignore[attr-defined]
+    async def shuffle(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_shuffle'):
@@ -158,8 +174,8 @@ class MusicControlView(discord.ui.View):
             print(f"🔍 [DEBUG] Exception in shuffle button: {e}")
             traceback.print_exc()
 
-    @discord.ui.button(emoji='🔄', label='AutoPlay', style=discord.ButtonStyle.secondary, custom_id='music_autoplay', row=2)
-    async def autoplay(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji='🔄', label='AutoPlay', style=discord.ButtonStyle.secondary, custom_id='music_autoplay', row=2)  # type: ignore[attr-defined]
+    async def autoplay(self, interaction: Any, button: Any):
         print(f"🔍 [DEBUG] AutoPlay button clicked by {interaction.user}")
         await interaction.response.send_message("🔄 AutoPlay feature coming soon!", ephemeral=True)
 
@@ -167,7 +183,7 @@ class MusicControlView(discord.ui.View):
         """Create controller embed with cleaned design (banner, thumbnail, organized fields)"""
         try:
             if song_data and status == "playing":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="🎵 Now Playing",
                     description=f"""
 **{song_data.get('title', 'Unknown Title')}**
@@ -211,7 +227,7 @@ Currently streaming high-quality audio
                     status_text += " • 🎵 Spotify"
                 embed.add_field(name="📊 Status", value=status_text, inline=False)
             elif song_data and status == "paused":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏸️ Paused",
                     description=f"""
 **{song_data.get('title', 'Unknown Title')}**
@@ -226,7 +242,7 @@ Playback is currently paused
                 loop_status = "Loop On" if queue.loop_mode else "Loop Off"
                 embed.add_field(name="📊 Status", value=f"⏸️ Paused • {loop_status}", inline=True)
             elif status == "loading":
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏳ Loading...",
                     description=f"""
 **{song_data.get('title', 'Loading...') if song_data else 'Preparing audio...'}**
@@ -239,7 +255,7 @@ Please wait while we prepare your music
                 embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
                 embed.add_field(name="📋 Queue", value=f"{queue.total_items()} items", inline=True)
             else:
-                embed = discord.Embed(
+                embed = discord.Embed(  # type: ignore[attr-defined]
                     title="🎵 AuroraMusic Controller",
                     description="""
 **No music playing**
@@ -270,7 +286,7 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
             return embed
         except Exception as e:
             print(f"❌ Error creating embed: {e}")
-            return discord.Embed(
+            return discord.Embed(  # type: ignore[attr-defined]
                 title="🎵 AuroraMusic Controller",
                 description="""
 **Controller Active**
@@ -324,8 +340,8 @@ class AdminCog(commands.Cog):
             return
         try:
             overwrites = {
-                interaction.guild.default_role: discord.PermissionOverwrite(send_messages=True, read_messages=True),
-                interaction.guild.me: discord.PermissionOverwrite(send_messages=True, read_messages=True, manage_messages=True)
+                interaction.guild.default_role: discord.PermissionOverwrite(send_messages=True, read_messages=True),  # type: ignore[attr-defined]
+                interaction.guild.me: discord.PermissionOverwrite(send_messages=True, read_messages=True, manage_messages=True)  # type: ignore[attr-defined]
             }
             channel = await interaction.guild.create_text_channel(
                 name=channel_name,
@@ -333,56 +349,31 @@ class AdminCog(commands.Cog):
                 overwrites=overwrites,
                 topic="🎵 AuroraMusic Controller • Send songs here to play them!"
             )
-            bot_user = interaction.client.user
-            bot_avatar_url = bot_user.display_avatar.url if bot_user.display_avatar else None
-            # Prefer the bot USER profile banner (can be animated GIF)
-            bot_banner_url = None
-            try:
-                fetched_bot = await interaction.client.fetch_user(bot_user.id)
-                user_banner = getattr(fetched_bot, "banner", None)
-                if user_banner:
-                    # Prefer animated GIF at large size, add cache-buster
-                    try:
-                        asset = user_banner.replace(format="gif", size=4096)
-                    except Exception:
-                        asset = user_banner.replace(size=4096)
-                    url = asset.url
-                    sep = '&' if '?' in url else '?'
-                    bot_banner_url = f"{url}{sep}t={int(time.time())}"
-            except Exception:
-                bot_banner_url = None
+            # Use ControllerManager for banner and controller embeds for consistency
+            manager = ControllerManager(interaction.client.get_cog('MusicCog'))
+            bot_banner_url = await manager._get_banner_url()
 
-            # Fallback: application banner (static) if user banner missing
-            if not bot_banner_url:
-                try:
-                    app_info = await interaction.client.application_info()
-                    if hasattr(app_info, "banner") and app_info.banner:
-                        asset = app_info.banner.replace(size=4096)
-                        url = asset.url
-                        sep = '&' if '?' in url else '?'
-                        bot_banner_url = f"{url}{sep}t={int(time.time())}"
-                except Exception:
-                    bot_banner_url = None
-            banner_embed = discord.Embed(title="🎵 Welcome to AuroraMusic!")
+            banner_embed = discord.Embed(title="🎵 Welcome to AuroraMusic!")  # type: ignore[attr-defined]
             banner_embed.set_footer(text="Developed by @sick._.duck.103 on Discord")
             # Show a big banner image; no profile avatar
             if bot_banner_url:
                 banner_embed.set_image(url=bot_banner_url)
             banner_msg = await channel.send(embed=banner_embed)
-            controller_embed = discord.Embed(
-                title="🎵 AuroraMusic Controller",
-                description="""
-**No music playing**
-
-Send a song name, YouTube URL, Spotify link, or playlist to start!
-                """,
-                color=0x7289da
+            # Build the same controller embed used during live updates
+            # Fake a minimal queue-like object for initial state
+            class _InitialQueue:
+                volume = 100
+                loop_mode = False
+                def total_items(self):
+                    return 0
+                processed_queue = []
+                queue = []
+            controller_embed = manager.create_controller_embed(
+                song_data=None,
+                status="waiting",
+                queue=_InitialQueue(),
+                bot_banner_url=bot_banner_url
             )
-            controller_embed.add_field(name="📋 Queue", value="Empty", inline=True)
-            controller_embed.add_field(name="⏭️ Next Song", value="Nothing queued", inline=True)
-            controller_embed.add_field(name="🔊 Volume", value="100%", inline=True)
-            controller_embed.add_field(name="Loop Mode", value="Disabled", inline=True)
-            controller_embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
             # Do not show profile picture or banner image on the controller embed
             view = MusicControlView()
             controller_msg = await channel.send(embed=controller_embed, view=view)
@@ -393,7 +384,7 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
                 "channel_name": channel_name
             }
             save_controller_data(self.controller_data)
-            success_embed = discord.Embed(
+            success_embed = discord.Embed(  # type: ignore[attr-defined]
                 title="✅ Setup Complete!",
                 description=f"Music controller created in {channel.mention}",
                 color=0x00ff00
@@ -413,7 +404,7 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
     async def ping_slash(self, interaction: discord.Interaction): # type: ignore
         """Test slash command"""
         latency = round(interaction.client.latency * 1000)
-        embed = discord.Embed(
+        embed = discord.Embed(  # type: ignore[attr-defined]
             title="🏓 Pong!",
             description=f"Bot latency: {latency}ms",
             color=0x00ff00
@@ -520,7 +511,7 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
             except Exception as e:
                 queue_summary = f"error: {e}"
 
-        embed = discord.Embed(title="🩺 AuroraMusic Health", color=0x00aaee)
+        embed = discord.Embed(title="🩺 AuroraMusic Health", color=0x00aaee)  # type: ignore[attr-defined]
         embed.add_field(name="Allowed Guild", value="✅ Yes" if allowed else "❌ No", inline=True)
         embed.add_field(name="Cookies", value=f"✅ {cookies_path}" if cookies_path else "⚠️ None", inline=True)
         embed.add_field(name="Spotify", value="✅ Enabled" if has_spotify else "⚠️ Disabled", inline=True)
@@ -581,7 +572,7 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
         except Exception:
             pass
 
-        embed = discord.Embed(title="🎵 AuroraMusic Help", description=description, color=0x7289da)
+        embed = discord.Embed(title="🎵 AuroraMusic Help", description=description, color=0x7289da)  # type: ignore[attr-defined]
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 # ✅ REQUIRED: Add setup function
