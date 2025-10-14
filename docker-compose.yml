@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  auroramusic:
+    build: .
+    working_dir: /app
+    volumes:
+      - ./data:/app/src/data
+      - ./downloads:/app/src/downloads
+      - ./cookies:/app/src/cookies:ro
+      - ./.env:/app/.env
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - ALLOWED_GUILD_IDS=${ALLOWED_GUILD_IDS}
+      - YOUTUBE_COOKIES=${YOUTUBE_COOKIES}
+    restart: unless-stopped
+    command: python src/bot.py

@@ -1,0 +1,37 @@
+# Secrets and environment
+.env
+.env.*
+bot.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# VS Code / IDE
+.vscode/
+.idea/
+
+# macOS / Windows cruft
+.DS_Store
+Thumbs.db
+
+# Runtime data and caches
+src/cookies/
+src/data/
+src/downloads/
+cookies/
+data/
+downloads/
+*.sqlite
+*.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/.env
+cookies/
+downloads/
+bot.log

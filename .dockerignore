@@ -1,0 +1,32 @@
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+
+# Env & logs
+.env
+bot.log
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime data (bind-mounted via compose)
+downloads/
+data/
+
+# Exclude src-level runtime and secrets
+src/downloads/
+src/data/
+src/cookies/
+
+# Misc
+*.swp
+*.swo
