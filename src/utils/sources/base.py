@@ -56,24 +56,24 @@ class AudioSource(ABC):
     async def cleanup(self):
         """Cleanup resources"""
         if self.session and not self.session.closed:
-            close_method = self.session.close
-            result = close_method()
-            # Only await if result is a coroutine
             import inspect
-            if result is not None and inspect.isawaitable(result):
+            if inspect.iscoroutinefunction(self.session.close):
                 try:
-                    await result
-                except TypeError:
-                    # Result is not awaitable, which is fine
+                    await self.session.close()  # type: ignore[misc]
+                except Exception:
                     pass
-            # If result is not awaitable or is None, do not await
+            else:
+                try:
+                    self.session.close()
+                except Exception:
+                    pass
 
 class BaseDownloader:
     """Base downloader with common functionality"""
     
     def __init__(self):
         self.downloads_dir = Config.DOWNLOADS_DIR
-        self.downloads_dir.mkdir(exist_ok=True)
+        self.downloads_dir.mkdir(parents=True, exist_ok=True)
     
     def get_file_path(self, title: str, extension: str = 'mp3') -> Path:
         """Get safe file path for download"""

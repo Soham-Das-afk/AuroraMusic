@@ -1,6 +1,6 @@
-import discord
-from discord.ext import commands
-from discord.utils import get
+import discord  # type: ignore
+from discord.ext import commands  # type: ignore
+from discord.utils import get  # type: ignore
 import asyncio
 import sys
 import logging
@@ -76,7 +76,7 @@ class AuroraMusicBot(commands.Bot):
                         if not self.get_guild(gid):
                             logging.info(f"Skipping command sync for guild {gid} (bot not in guild)")
                             continue
-                        await self.tree.sync(guild=discord.Object(id=gid))
+                        await self.tree.sync(guild=discord.Object(id=gid))  # type: ignore[attr-defined]
                         logging.info(f"✅ Synced app commands for guild {gid}")
                     except Exception as guild_sync_err:
                         logging.error(f"❌ Failed to sync commands for guild {gid}: {guild_sync_err}")
@@ -118,8 +118,8 @@ class AuroraMusicBot(commands.Bot):
 
         # Set status
         await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.listening,
+            activity=discord.Activity(  # type: ignore[attr-defined]
+                type=discord.ActivityType.listening,  # type: ignore[attr-defined]
                 name="🎵 music | /help"
             )
         )
@@ -144,7 +144,7 @@ class AuroraMusicBot(commands.Bot):
             for g in self.guilds:
                 if Config.is_guild_allowed(g.id):
                     try:
-                        guild_obj = discord.Object(id=g.id)
+                        guild_obj = discord.Object(id=g.id)  # type: ignore[attr-defined]
                         # Phase 1: clear existing guild commands remotely
                         try:
                             # Clear local view for this guild, then sync to wipe remote
@@ -272,7 +272,7 @@ class AuroraMusicBot(commands.Bot):
         else:
             # For allowed guilds, ensure slash commands are synced immediately
             try:
-                await self.tree.sync(guild=discord.Object(id=guild.id))
+                await self.tree.sync(guild=discord.Object(id=guild.id))  # type: ignore[attr-defined]
                 logging.info(f"✅ Synced app commands for new guild {guild.id}")
             except Exception as e:
                 logging.error(f"❌ Failed to sync commands for new guild {guild.id}: {e}")
@@ -328,7 +328,8 @@ class AuroraMusicBot(commands.Bot):
             return
         else:
             # Ignore messages in non-controller channels (slash commands handled separately)
-            logging.info(f"🔍 [NORMAL] Ignoring non-controller message in #{message.channel.name}")
+            # Reduce noise: log at debug level only
+            logging.debug(f"[NORMAL] Ignoring non-controller message in #{message.channel.name}")
             return
 
     async def on_voice_state_update(self, member, before, after):
@@ -368,7 +369,7 @@ async def main():
         if hasattr(Config, "validate") and not Config.validate():
             logging.error("❌ Configuration validation failed")
             return
-        intents = discord.Intents.default()
+        intents = discord.Intents.default()  # type: ignore[attr-defined]
         intents.message_content = True
         intents.voice_states = True
         intents.guilds = True

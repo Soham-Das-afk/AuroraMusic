@@ -48,12 +48,19 @@ class PlaybackManager:
             
             print(f"🎵 Playing: {next_song.get('title', 'Unknown')}")
             
-            # ✅ FIXED: Create player with multiple attempts and better error handling
+            # ✅ Reuse cached player when available
             song_url = next_song.get('webpage_url')
             player = None
+            if song_url and song_url in queue.cache:
+                cached = queue.cache.get(song_url)
+                if cached:
+                    player = cached
+                    print("✅ Using cached player for next song")
             
             for attempt in range(3):
                 try:
+                    if player:
+                        break
                     print(f"🔄 Creating player (attempt {attempt + 1}/3)")
                     player = await YTDLSource.from_url(song_url, volume_percent=queue.volume)
                     
@@ -78,14 +85,22 @@ class PlaybackManager:
                 await asyncio.sleep(1)
                 return await self.start_playback(voice_client, guild_id)  # Try next song
             
-            # ✅ FIXED: Start playback with better error handling
+            # ✅ Start playback with better error handling
             try:
+                def _after(error):
+                    try:
+                        fut = asyncio.run_coroutine_threadsafe(
+                            self.song_finished(error, guild_id),
+                            self.music_cog.bot.loop
+                        )
+                        # Do not block the audio thread; add a done callback to surface errors in logs
+                        fut.add_done_callback(lambda f: f.exception())
+                    except Exception:
+                        pass
+
                 voice_client.play(
-                    player, 
-                    after=lambda error: asyncio.run_coroutine_threadsafe(
-                        self.song_finished(error, guild_id),  # ✅ FIXED: error first, then guild_id
-                        self.music_cog.bot.loop
-                    ).result()
+                    player,
+                    after=_after
                 )
                 
                 # ✅ Wait a moment to verify playback started
@@ -359,12 +374,19 @@ class PlaybackManager:
             
             if player:
                 # Start playback from new position
+                def _after_seek(error):
+                    try:
+                        fut = asyncio.run_coroutine_threadsafe(
+                            self.song_finished(error, guild_id),
+                            self.music_cog.bot.loop
+                        )
+                        fut.add_done_callback(lambda f: f.exception())
+                    except Exception:
+                        pass
+
                 voice_client.play(
                     player,
-                    after=lambda error: asyncio.run_coroutine_threadsafe(
-                        self.song_finished(error, guild_id),  # ✅ FIXED: error first, then guild_id
-                        self.music_cog.bot.loop
-                    ).result()
+                    after=_after_seek
                 )
                 
                 # Update position tracking

@@ -193,14 +193,20 @@ class YouTubeHandlerSingleton:
             for strategy_name, extra_opts in extraction_strategies:
                 try:
                     logging.info(f"🔍 Trying extraction strategy: {strategy_name}")
-                    ytdl = self._get_search_instance(use_cookies=True)
-                    ytdl.params.update(extra_opts)
+                    base_instance = self._get_search_instance(use_cookies=True)
+                    # Build a fresh options dict to avoid mutating the cached instance
+                    base_opts = dict(getattr(base_instance, 'params', {}) or {})
+                    base_opts.update(extra_opts)
+                    ytdl_tmp = yt_dlp.YoutubeDL(base_opts)  # type: ignore[arg-type]
                     data = await asyncio.wait_for(
-                        loop.run_in_executor(None, lambda: ytdl.extract_info(search_query, download=False)),
+                        loop.run_in_executor(None, lambda: ytdl_tmp.extract_info(search_query, download=False)),
                         timeout=8.0
                     )
                     if data and 'entries' in data and data['entries']:
-                        for entry in data['entries']:
+                        entries = data.get('entries') or []
+                        if not isinstance(entries, list):
+                            entries = []
+                        for entry in entries:
                             if entry and entry.get('id'):
                                 result = self._format_song_data(entry)
                                 logging.info(f"✅ Found with strategy: {strategy_name}")

@@ -109,6 +109,8 @@ class Config:
         paths_to_check.extend([
             str(cls.COOKIES_DIR / "youtube.txt"),
             str(cls.BASE_DIR / "youtube.txt"),
+            # Also support top-level project cookies for local runs
+            str((cls.BASE_DIR.parent / "cookies" / "youtube.txt")),
             str(Path.home() / ".config" / "aurora" / "youtube.txt")
         ])
         
