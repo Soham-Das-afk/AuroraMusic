@@ -1,4 +1,4 @@
-# AuroraMusic Discord Music Bot (v3.2.21)
+# AuroraMusic Discord Music Bot (v3.2.31)
 
 AuroraMusic is a feature-rich music bot designed for Discord servers, allowing users to play music from various sources, manage queues, and interact with an intuitive user interface. This bot supports both YouTube and Spotify, providing a seamless music experience for users.
 
@@ -87,7 +87,7 @@ docker compose logs -f
 
 - Helpful slash commands:
    - `/help` — quick usage guide and links to your controller channel
-   - `/ping` — bot latency/status (shows AuroraMusic v3.2.21)
+   - `/ping` — bot latency/status (shows AuroraMusic v3.2.31)
    - `/health` — configuration and queue summary
    - `/cleanup` — remove the controller (admin only)
 

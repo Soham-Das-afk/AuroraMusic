@@ -12,7 +12,7 @@ class Config:
     # Bot Configuration
     BOT_TOKEN = os.getenv('BOT_TOKEN')
     # Application version
-    VERSION = "3.2.21"
+    VERSION = "3.2.31"
     
     # Discord Configuration
     ALLOWED_GUILD_IDS = [
