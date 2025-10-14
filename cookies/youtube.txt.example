@@ -1,0 +1,3 @@
+# Example cookies file for yt-dlp
+# Export your own cookies from your browser (Netscape format) and save here as youtube.txt
+# Then set YOUTUBE_COOKIES=cookies/youtube.txt in .env

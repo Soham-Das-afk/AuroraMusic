@@ -20,12 +20,20 @@ __pycache__/
 Thumbs.db
 
 # Runtime data and caches
-src/cookies/
-src/data/
-src/downloads/
-cookies/
-data/
-downloads/
+# Ignore contents of these folders, but keep placeholders and docs
+src/cookies/*
+src/data/*
+src/downloads/*
+cookies/*
+data/*
+downloads/*
+!cookies/README.md
+!cookies/youtube.txt.example
+!data/.gitkeep
+!downloads/.gitkeep
+!src/cookies/.gitkeep
+!src/data/.gitkeep
+!src/downloads/.gitkeep
 *.sqlite
 *.db
 
@@ -33,6 +41,3 @@ downloads/
 dist/
 build/
 *.egg-info/.env
-cookies/
-downloads/
-bot.log
