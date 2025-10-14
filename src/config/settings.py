@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 import logging
 
 # Load environment variables
@@ -12,7 +12,7 @@ class Config:
     # Bot Configuration
     BOT_TOKEN = os.getenv('BOT_TOKEN')
     # Application version
-    VERSION = "3.2.10"
+    VERSION = "3.2.21"
     
     # Discord Configuration
     ALLOWED_GUILD_IDS = [
