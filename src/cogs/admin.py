@@ -415,9 +415,9 @@ class AdminCog(commands.Cog):
         embed.add_field(name="🎵 Music System", value="Available", inline=True)
         try:
             from config.settings import Config as _Cfg
-            ver = getattr(_Cfg, 'VERSION', '3.2.36')
+            ver = getattr(_Cfg, 'VERSION', '3.2.37')
         except Exception:
-            ver = '3.2.36'
+            ver = '3.2.37'
         embed.add_field(name="🔧 Version", value=f"AuroraMusic v{ver}", inline=True)
         
         await interaction.response.send_message(embed=embed)
