@@ -5,6 +5,10 @@
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
 ![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
 
+Quick links:
+- Latest Release: https://github.com/Soham-Das-afk/AuroraMusic/releases/latest
+- Docker Hub: https://hub.docker.com/r/sohamdas103/auroramusic
+
 AuroraMusic is a feature-rich music bot designed for Discord servers, allowing users to play music from various sources, manage queues, and interact with an intuitive user interface. This bot supports both YouTube and Spotify, providing a seamless music experience for users.
 
 ## Quick start (copy-paste)
@@ -38,6 +42,34 @@ Docker (both OS):
 # ensure .env exists and is filled; cookies recommended at cookies/youtube.txt
 docker compose up -d --build
 docker compose logs -f
+```
+
+Run directly with Docker (without Compose):
+
+Windows PowerShell
+```powershell
+# assumes you created and filled .env in the project folder
+docker pull sohamdas103/auroramusic:latest
+docker run --name auroramusic ^
+   --env-file .env ^
+   -v "$PWD/cookies:/app/src/cookies:ro" ^
+   -v "$PWD/data:/app/src/data" ^
+   -v "$PWD/downloads:/app/src/downloads" ^
+   -p 8080:8080 ^
+   -d sohamdas103/auroramusic:latest
+```
+
+Linux/macOS
+```bash
+# assumes you created and filled .env in the project folder
+docker pull sohamdas103/auroramusic:latest
+docker run --name auroramusic \
+   --env-file .env \
+   -v "$(pwd)/cookies:/app/src/cookies:ro" \
+   -v "$(pwd)/data:/app/src/data" \
+   -v "$(pwd)/downloads:/app/src/downloads" \
+   -p 8080:8080 \
+   -d sohamdas103/auroramusic:latest
 ```
 
 ## Features
@@ -286,6 +318,26 @@ Notes:
 4) Stop:
    ```bash
    docker compose down
+   ```
+
+### Upgrade
+
+- Docker (Compose):
+   ```bash
+   docker compose pull
+   docker compose up -d --pull always
+   ```
+- Docker (direct run):
+   ```bash
+   docker pull sohamdas103/auroramusic:latest
+   docker stop auroramusic && docker rm auroramusic
+   # re-run the docker run command from above
+   ```
+- From source (venv):
+   ```powershell
+   git pull
+   pip install -r requirements.txt
+   python src/bot.py
    ```
 
 ## CI/CD
