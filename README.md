@@ -1,10 +1,10 @@
-# AuroraMusic Discord Music Bot (v3.2.31)
+# AuroraMusic Discord Music Bot (v3.2.35)
 
 <!-- If this repo is public, you can use dynamic GitHub badges below:
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=master)
 -->
-[![release](https://img.shields.io/badge/release-v3.2.31-blue)](https://github.com/Soham-Das-afk/AuroraMusic/releases/latest)
+[![release](https://img.shields.io/badge/release-v3.2.35-blue)](https://github.com/Soham-Das-afk/AuroraMusic/releases/latest)
 [![build](https://img.shields.io/badge/build-GitHub%20Actions-blue)](https://github.com/Soham-Das-afk/AuroraMusic/actions)
 
 <!-- Note: Repo is currently private (dynamic GitHub badges require public visibility). Once public, you can uncomment the dynamic badges above -->
@@ -130,7 +130,7 @@ docker run --name auroramusic \
 
 - Helpful slash commands:
    - `/help` — quick usage guide and links to your controller channel
-   - `/ping` — bot latency/status (shows AuroraMusic v3.2.31)
+   - `/ping` — bot latency/status (shows AuroraMusic v3.2.35)
    - `/health` — configuration and queue summary
    - `/cleanup` — remove the controller (admin only)
 
@@ -289,6 +289,7 @@ Notes:
    ```
    docker compose down
    ```
+- Multi-arch images: Starting with v3.2.35+, images are published for `linux/amd64` and `linux/arm64` (Apple Silicon, Graviton, etc.). Docker will automatically pull the correct architecture manifest.
  
 ### Windows (Docker Desktop)
 
@@ -348,7 +349,7 @@ Notes:
 
 ## CI/CD
 
-- Pushing a tag like `v3.2.31` triggers GitHub Actions to:
+- Pushing a tag like `v3.2.35` triggers GitHub Actions to:
    - Build and push Docker images (if secrets are configured)
    - Create a GitHub Release with notes
 
