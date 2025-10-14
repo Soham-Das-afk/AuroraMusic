@@ -73,11 +73,40 @@ jobs:
         run: |
           echo "DockerHub secrets not configured. Skipping Docker build/push."
 
+      - name: Build release body
+        id: relbody
+        run: |
+          version="${{ steps.vars.outputs.version }}"
+          tag="${{ steps.vars.outputs.ref_name }}"
+          notes_file="release-notes/v${version}.md"
+          echo "Preparing release body for ${tag} (version ${version})"
+          body_tmp="/tmp/release_body.md"
+          echo "# AuroraMusic ${tag}" > "$body_tmp"
+          echo >> "$body_tmp"
+          if [ -f "$notes_file" ]; then
+            echo "Including release-notes file: $notes_file"
+            cat "$notes_file" >> "$body_tmp"
+            echo >> "$body_tmp"
+          else
+            echo "(No dedicated release-notes/v${version}.md file found)" >> "$body_tmp"
+            echo >> "$body_tmp"
+          fi
+          echo "## Recent Commits" >> "$body_tmp"
+          git --no-pager log -15 --pretty='- %h %s (%an)' --no-merges >> "$body_tmp" || true
+          echo >> "$body_tmp"
+          echo '## Docker Images' >> "$body_tmp"
+          echo "Published:\n- sohamdas103/auroramusic:${version}\n- sohamdas103/auroramusic:latest" >> "$body_tmp"
+          echo >> "$body_tmp"
+          echo '## Verification' >> "$body_tmp"
+          echo "Multi-arch manifest includes (expected): linux/amd64, linux/arm64" >> "$body_tmp"
+          echo "body_path=$body_tmp" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.ref_name }}
           name: AuroraMusic ${{ steps.vars.outputs.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
+          body_path: ${{ steps.relbody.outputs.body_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
