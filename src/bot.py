@@ -238,7 +238,7 @@ class AuroraMusicBot(commands.Bot):
     async def _restart_process(self):
         """Gracefully close the bot and exec a fresh Python process for this script."""
         try:
-            # Flush logs
+            # Flush logs first
             for handler in logging.getLogger().handlers:
                 try:
                     handler.flush()
@@ -246,21 +246,51 @@ class AuroraMusicBot(commands.Bot):
                     pass
 
             # Close Discord connection cleanly
-            await self.close()
-        except Exception as e:
-            logging.debug(f"Close during restart encountered: {e}")
+            try:
+                await self.close()
+            except Exception as e:
+                logging.debug(f"Close during restart encountered: {e}")
 
-        # Build exec arguments to relaunch this script
-        python = sys.executable
-        script_path = Path(__file__).resolve()
-        args = [python, str(script_path)]
-        logging.info(f"🚀 Re-exec: {' '.join(args)}")
-        try:
-            os.execv(python, args)
+            # Extra safety: explicitly close HTTP client/session if present
+            try:
+                http = getattr(self, 'http', None)
+                if http and hasattr(http, 'close'):
+                    await http.close()  # type: ignore[func-returns-value]
+                    logging.debug("HTTP client explicitly closed")
+            except Exception as e:
+                logging.debug(f"HTTP close during restart encountered: {e}")
+
+            # Cancel lingering background tasks to avoid unclosed session warnings
+            try:
+                loop = asyncio.get_running_loop()
+                current = asyncio.current_task()
+                tasks = [t for t in asyncio.all_tasks(loop) if t is not current and not t.done()]
+                for t in tasks:
+                    t.cancel()
+                if tasks:
+                    await asyncio.wait(tasks, timeout=0.5)
+            except Exception as e:
+                logging.debug(f"Task cancellation during restart encountered: {e}")
+
+            # Give the event loop a brief moment to flush closures
+            try:
+                await asyncio.sleep(0.1)
+            except Exception:
+                pass
+
+            # Build exec arguments to relaunch this script
+            python = sys.executable
+            script_path = Path(__file__).resolve()
+            args = [python, str(script_path)]
+            logging.info(f"🚀 Re-exec: {' '.join(args)}")
+            try:
+                os.execv(python, args)
+            except Exception as e:
+                logging.error(f"❌ Exec failed, exiting instead: {e}")
+                os._exit(0)
         except Exception as e:
-            logging.error(f"❌ Exec failed, exiting instead: {e}")
-            # As a fallback, exit and let external supervisor (if any) restart
-            sys.exit(0)
+            logging.error(f"❌ Restart routine error: {e}")
+            os._exit(0)
 
     async def on_guild_join(self, guild):
         """Leave unauthorized guilds immediately when added after startup, and send contact message"""
