@@ -98,7 +98,7 @@ jobs:
 
       - name: Trivy image vulnerability scan
         if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.33.1
         continue-on-error: true
         with:
           image-ref: sohamdas103/auroramusic:${{ steps.vars.outputs.version }}
