@@ -121,7 +121,7 @@ jobs:
 
       - name: Upload SBOM artifact
         if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sbom-${{ steps.vars.outputs.version }}
           path: sbom-${{ steps.vars.outputs.version }}.spdx.json
