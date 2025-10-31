@@ -1,6 +1,5 @@
 import discord
 import asyncio
-import traceback
 import time
 import logging
 from typing import Optional
@@ -38,7 +37,6 @@ class VolumeModal(discord.ui.Modal, title='Set Volume'):
             old_volume = queue.volume
             queue.set_volume(volume_value)
             
-            # Update controller
             await self.music_cog.update_controller_embed(
                 interaction.guild.id, queue.current,
                 "playing" if getattr(interaction.guild, 'voice_client', None) and getattr(interaction.guild.voice_client, 'is_playing', lambda: False)() else "waiting"
@@ -54,7 +52,7 @@ class VolumeModal(discord.ui.Modal, title='Set Volume'):
                 "❌ Please enter a valid number (10-200)", ephemeral=True
             )
         except Exception as e:
-            logging.debug("Error in volume modal: %s", e)
+            logging.error(f"Error in volume modal: {e}")
             await interaction.response.send_message(
                 "❌ Volume change failed", ephemeral=True
             )
@@ -84,7 +82,7 @@ class ButtonHandlers:
         """Record button error for monitoring"""
         self._error_counts[button_type] = self._error_counts.get(button_type, 0) + 1
         if self._error_counts[button_type] > 10:
-            logging.debug("High error count for %s: %s", button_type, self._error_counts[button_type])
+            logging.warning(f"High error count for {button_type}: {self._error_counts[button_type]}")
     
     async def handle_play_pause(self, interaction):
         """Enhanced play/pause with state validation"""
@@ -124,7 +122,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("play_pause")
-            logging.debug("Play/Pause error: %s", e)
+            logging.error(f"Play/Pause error: {e}")
             try:
                 msg = await interaction.followup.send("❌ Play/Pause failed!", ephemeral=True)
                 await self._auto_delete_message(msg, 3)
@@ -148,19 +146,16 @@ class ButtonHandlers:
             queue = self.queue_manager.get_queue(interaction.guild.id)
             current_title = queue.current.get('title', 'Unknown') if queue.current else 'Unknown'
             
-            # ✅ CRITICAL: Mark as manual operation BEFORE stopping
-            logging.debug("[SKIP] Marking guild %s as manual operation", interaction.guild.id)
             self.music_cog.playback_manager._manual_operations.add(interaction.guild.id)
             
-            # ✅ Stop playback (this triggers song_finished)
             voice_client.stop()
+            await asyncio.sleep(1.0)  # Allow time for ffmpeg process to terminate
             
             await interaction.followup.send(f"⏭️ Skipped: {current_title}", ephemeral=True)
             
         except Exception as e:
             self._record_error("skip")
-            logging.debug("Skip error: %s", e)
-            # ✅ Clear manual flag on error
+            logging.error(f"Skip error: {e}")
             self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
             try:
                 await interaction.followup.send("❌ Skip failed!", ephemeral=True)
@@ -183,14 +178,11 @@ class ButtonHandlers:
             
             queue = self.queue_manager.get_queue(interaction.guild.id)
             
-            # Stop and clear
             voice_client.stop()
             queue.clear()
             
-            # Cleanup cache
             queue.cache.clear()
             
-            # Update controller
             await asyncio.sleep(0.5)
             await self.music_cog.update_controller_embed(interaction.guild.id, None, "waiting")
             
@@ -199,7 +191,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("stop")
-            logging.debug("Stop error: %s", e)
+            logging.error(f"Stop error: {e}")
             try:
                 await self.music_cog.update_controller_embed(interaction.guild.id, None, "waiting")
                 msg = await interaction.followup.send("❌ Stop failed!", ephemeral=True)
@@ -212,70 +204,54 @@ class ButtonHandlers:
         if not self._check_cooldown(interaction.user.id, "previous"):
             await interaction.response.send_message("⏳ Please wait before using previous", ephemeral=True)
             return
-        
+
         try:
             await interaction.response.defer(ephemeral=True)
+            guild_id = interaction.guild.id
             voice_client = interaction.guild.voice_client
-            
+
             if not voice_client or not voice_client.is_connected():
                 await interaction.followup.send("❌ Not connected to voice!", ephemeral=True)
                 return
-            
-            queue = self.queue_manager.get_queue(interaction.guild.id)
-            
+
+            queue = self.queue_manager.get_queue(guild_id)
+
             if not queue.history:
                 await interaction.followup.send("❌ No previous song available!", ephemeral=True)
                 return
-            
-            logging.debug("[PREVIOUS] History size: %d", len(queue.history))
-            logging.debug("[PREVIOUS] Current song: %s", queue.current.get('title', 'None') if queue.current else 'None')
-            
-            # ✅ CRITICAL FIX: Mark as manual operation to prevent auto-advance conflicts
-            self.music_cog.playback_manager._manual_operations.add(interaction.guild.id)
-            
-            async with self.queue_manager.get_lock(interaction.guild.id):
-                # Get the previous song
-                previous_song = queue.get_previous()  # This handles the queue manipulation correctly
-                
+
+
+            self.music_cog.playback_manager._manual_operations.add(guild_id)
+
+            async with self.queue_manager.get_lock(guild_id):
+                if queue.current:
+                    queue.processed_queue.appendleft(queue.current)
+
+                previous_song = queue.get_previous()
+
                 if not previous_song:
                     await interaction.followup.send("❌ No previous song available!", ephemeral=True)
+                    if queue.processed_queue and queue.processed_queue[0] == queue.current:
+                        queue.current = queue.processed_queue.popleft()
+                    self.music_cog.playback_manager._manual_operations.discard(guild_id)
                     return
-                
-                logging.debug("Previous song retrieved: %s", previous_song.get('title', 'Unknown'))
-                
-                # ✅ FIXED: Stop current playback and wait
+
+
+                queue.prefer_file_once = True
+
                 voice_client.stop()
-                await asyncio.sleep(1.0)  # Longer wait for complete stop
-                
-                # ✅ FIXED: Clear the manual operation flag after stop completes
                 await asyncio.sleep(0.5)
-                self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
-                
-                # ✅ Use playback manager to start the previous song (prefer local cached file)
-                # Set a transient flag on queue; start_playback will consume it
-                try:
-                    queue.prefer_file_once = True
-                except Exception:
-                    queue.prefer_file_once = False
-                success = await self.music_cog.playback_manager.start_playback(voice_client, interaction.guild.id)
-                
-                if success:
-                    msg = await interaction.followup.send(
-                        f"⏮️ Playing previous: {previous_song.get('title', 'Unknown')[:50]}", 
-                        ephemeral=True
-                    )
-                else:
-                    msg = await interaction.followup.send("❌ Failed to start previous song!", ephemeral=True)
-                
-                await self._auto_delete_message(msg, 3)
-    
+
+                await self.music_cog.playback_manager.start_playback(voice_client, guild_id)
+
+            msg = await interaction.followup.send(f"⏮️ Playing previous: {previous_song.get('title', 'Unknown')[:50]}", ephemeral=True)
+            await self._auto_delete_message(msg, 3)
+
         except Exception as e:
             self._record_error("previous")
-            logging.debug("Previous error: %s", e)
-            import traceback
-            traceback.print_exc()
-            # Clear manual operation flag on error
-            self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
+            logging.error(f"Previous error: {e}")
+            if interaction.guild:
+                self.music_cog.playback_manager._manual_operations.discard(interaction.guild.id)
             try:
                 await interaction.followup.send("❌ Previous failed!", ephemeral=True)
             except:
@@ -299,7 +275,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("shuffle")
-            logging.debug("Shuffle error: %s", e)
+            logging.error(f"Shuffle error: {e}")
             try:
                 await interaction.followup.send("❌ Shuffle failed!", ephemeral=True)
             except:
@@ -312,7 +288,7 @@ class ButtonHandlers:
             
         except Exception as e:
             self._record_error("volume")
-            logging.debug("Volume error: %s", e)
+            logging.error(f"Volume error: {e}")
             try:
                 await interaction.response.send_message("❌ Volume control failed!", ephemeral=True)
             except:
@@ -325,10 +301,8 @@ class ButtonHandlers:
             queue = self.queue_manager.get_queue(interaction.guild.id)
             
             queue.loop_mode = not queue.loop_mode
-            # ✅ FIXED: Keep the 🔁 symbol in the button response
             status = "🔁 enabled" if queue.loop_mode else "🔁 disabled"
             
-            # Update controller to reflect loop status
             await self.music_cog.update_controller_embed(
                 interaction.guild.id, queue.current,
                 "playing" if interaction.guild.voice_client and 
@@ -340,7 +314,7 @@ class ButtonHandlers:
             
         except Exception as e:
             self._record_error("loop")
-            logging.debug("Loop error: %s", e)
+            logging.error(f"Loop error: {e}")
             try:
                 await interaction.followup.send("❌ Loop toggle failed!", ephemeral=True)
             except:
@@ -377,7 +351,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("rewind")
-            logging.debug("Rewind error: %s", e)
+            logging.error(f"Rewind error: {e}")
             try:
                 await interaction.followup.send("❌ Rewind failed!", ephemeral=True)
             except:
@@ -401,7 +375,6 @@ class ButtonHandlers:
             current_pos = self.music_cog.playback_manager.get_current_position(interaction.guild.id)
             new_position = current_pos + 10
             
-            # Check duration
             duration = queue.current.get('duration')
             if duration and new_position >= duration - 5:  # 5 second buffer
                 voice_client.stop()
@@ -419,7 +392,7 @@ class ButtonHandlers:
                 
         except Exception as e:
             self._record_error("forward")
-            logging.debug("Forward error: %s", e)
+            logging.error(f"Forward error: {e}")
             try:
                 await interaction.followup.send("❌ Forward failed!", ephemeral=True)
             except:
@@ -432,12 +405,11 @@ class ButtonHandlers:
                 await asyncio.sleep(delay)
                 if message:
                     await message.delete()
-                    logging.debug("Auto-deleted button response after %ds", delay)
             except discord.NotFound:
-                logging.debug("Button response already deleted")
+                pass
             except discord.Forbidden:
-                logging.debug("No permission to delete button response")
+                logging.warning("No permission to delete button response")
             except Exception as e:
-                logging.debug("Error auto-deleting button response: %s", e)
+                logging.error(f"Error auto-deleting button response: {e}")
         
         asyncio.create_task(delete_task())

@@ -21,12 +21,10 @@ class FileManager:
             current_time = time.time()
             files = list(self.downloads_dir.glob("*.mp3"))
             
-            # Sort by modification time (oldest first)
             files.sort(key=lambda f: f.stat().st_mtime)
             
             deleted_count = 0
             
-            # Delete files older than max_age_hours
             for file_path in files:
                 file_age = current_time - file_path.stat().st_mtime
                 age_hours = file_age / 3600
@@ -35,11 +33,9 @@ class FileManager:
                     try:
                         file_path.unlink()
                         deleted_count += 1
-                        logging.debug("Deleted old file: %s", file_path.name)
                     except Exception as e:
-                        logging.debug("Error deleting %s: %s", file_path.name, e)
+                        logging.error(f"Exception: {e}")
             
-            # If still too many files, delete oldest ones
             remaining_files = list(self.downloads_dir.glob("*.mp3"))
             if len(remaining_files) > self.max_files:
                 remaining_files.sort(key=lambda f: f.stat().st_mtime)
@@ -49,15 +45,14 @@ class FileManager:
                     try:
                         file_path.unlink()
                         deleted_count += 1
-                        logging.debug("Deleted excess file: %s", file_path.name)
                     except Exception as e:
-                        logging.debug("Error deleting %s: %s", file_path.name, e)
+                        logging.error(f"Exception: {e}")
             
             if deleted_count > 0:
-                logging.debug("Cleanup complete: %d files deleted", deleted_count)
+                pass
             
         except Exception as e:
-            logging.debug("Error during cleanup: %s", e)
+            logging.error(f"Exception: {e}")
     
     def get_storage_info(self):
         """Get storage information"""

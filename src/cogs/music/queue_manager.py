@@ -3,8 +3,9 @@ from collections import deque
 import random
 import time
 import logging
+from utils.sources.youtube import youtube_handler
+from utils.sources.search import search_song, search_playlist, is_playlist_url
 
-# ✅ Add metadata cache to MusicQueue
 class MusicQueue:
     """Enhanced music queue with caching support"""
     
@@ -25,14 +26,11 @@ class MusicQueue:
         
     def add_request(self, request_data):
         """Add a raw request to the queue with proper order"""
-        # ✅ FIXED: Calculate order based on total requests added (not current queue length)
         if 'order' not in request_data:
-            # Calculate proper order based on existing requests
             existing_orders = [req.get('order', 0) for req in self.queue]
             next_order = max(existing_orders, default=0) + 1
             request_data['order'] = next_order
     
-        # Add timestamp if not present
         if 'timestamp' not in request_data:
             request_data['timestamp'] = time.time()
     
@@ -40,7 +38,6 @@ class MusicQueue:
         
         query = request_data.get('query', 'Unknown')
         order = request_data.get('order', '?')
-        logging.debug("[QUEUE] Added request #%s: %s", order, query[:30])
     
     def add_processed_song(self, song_data):
         """Add a processed song to the ready queue"""
@@ -48,62 +45,48 @@ class MusicQueue:
         
     def get_next(self):
         """Get next processed song"""
-        # ✅ Only add to history if we actually had a current song
         if self.current and self.current.get('title'):
-            # Avoid duplicate entries in history
             if not self.history or self.history[-1].get('id') != self.current.get('id'):
                 self.history.append(self.current)
-                logging.debug("Added to history: %s", self.current.get('title', 'Unknown'))
             else:
-                logging.debug("Song already in history, skipping: %s", self.current.get('title', 'Unknown'))
+                pass
 
         if self.processed_queue:
             self.current = self.processed_queue.popleft()
-            logging.debug("Now current: %s", self.current.get('title', 'Unknown'))
             return self.current
         else:
             self.current = None
-            logging.debug("No more songs in queue")
         return None
         
     def get_previous(self):
         """Get previous song - IMPROVED VERSION"""
         if not self.history:
-            logging.debug("No previous songs in history")
             return None
         
-        # ✅ FIXED: Don't add current to processed_queue if it's None
         if self.current and self.current.get('title'):
-            logging.debug("Moving current song back to front: %s", self.current.get('title', 'Unknown'))
             self.processed_queue.appendleft(self.current)
         
-        # ✅ Get the last song from history
         previous_song = self.history.pop()
         
-        # ✅ CRITICAL: Set this as current immediately
         self.current = previous_song
-        logging.debug("Retrieved previous: %s", previous_song.get('title', 'Unknown'))
         
         return self.current
 
     def add_to_history(self, song_data):
         """Manually add a song to history (for better control)"""
         if song_data and song_data.get('title'):
-            # Avoid duplicates
             if not self.history or self.history[-1].get('id') != song_data.get('id'):
                 self.history.append(song_data)
-                logging.debug("Manually added to history: %s", song_data.get('title', 'Unknown'))
         
     def clear(self):
         """Clear all queues"""
         if self.current:
-            logging.debug("Clearing current song: %s", self.current.get('title', 'Unknown'))
+            pass
     
         self.queue.clear()
         self.processed_queue.clear()
         self.current = None
         self.cache.clear()
-        logging.debug("All queues cleared")
         
     def shuffle(self):
         """Shuffle processed queue"""
@@ -155,7 +138,6 @@ class MusicQueue:
             if time.time() < self.cache_expiry.get(song_id, 0):
                 return self.metadata_cache[song_id]
             else:
-                # Expired, remove
                 self.metadata_cache.pop(song_id, None)
                 self.cache_expiry.pop(song_id, None)
         return None
@@ -169,9 +151,7 @@ class MusicQueue:
             'cache_coverage': 0
         }
         
-        # Get list of cached songs
         for url, player in self.cache.items():
-            # Try to find the song title from processed queue
             cached_title = 'Unknown'
             for song in self.processed_queue:
                 if song['webpage_url'] == url:
@@ -179,7 +159,6 @@ class MusicQueue:
                     break
             cache_info['cached_songs'].append(cached_title)
         
-        # Get next songs in queue
         processed_list = list(self.processed_queue)
         for i in range(min(3, len(processed_list))):
             song = processed_list[i]
@@ -189,7 +168,6 @@ class MusicQueue:
                 'cached': is_cached
             })
         
-        # Calculate cache coverage
         if processed_list:
             cached_next = sum(1 for song in processed_list[:2] if song['webpage_url'] in self.cache)
             cache_info['cache_coverage'] = (cached_next / min(2, len(processed_list))) * 100
@@ -238,3 +216,26 @@ class QueueManager:
             self.remove_queue(guild_id)
         
         return len(empty_guilds)
+
+    async def add_to_queue(self, guild_id: int, query: str, requested_by: int):
+        """Adds a song or playlist to the queue and returns info."""
+        queue = self.get_queue(guild_id)
+        playlist_info = None
+        song_data = None
+
+        if is_playlist_url(query):
+            playlist_info, songs = await search_playlist(query)
+            if not songs:
+                return None, None
+            for song in songs:
+                song['requested_by'] = requested_by
+                queue.add_request({'query': song.get('webpage_url') or song.get('title'), 'song_data': song, 'requested_by': requested_by})
+            song_data = songs[0] # Return first song for immediate feedback
+        else:
+            song_data = await search_song(query)
+            if not song_data:
+                return None, None
+            song_data['requested_by'] = requested_by
+            queue.add_request({'query': song_data['webpage_url'], 'song_data': song_data, 'requested_by': requested_by})
+
+        return song_data, playlist_info

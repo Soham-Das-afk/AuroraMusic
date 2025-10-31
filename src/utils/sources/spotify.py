@@ -24,10 +24,8 @@ class SpotifyHandler(AudioSource):
         self.spotify = None
         self.session: Optional[aiohttp.ClientSession] = None
         
-        # ✅ Connection pooling
         self._connector = None
         
-        # Initialize Spotify client
         self._initialize_spotify()
     
     def _initialize_spotify(self):
@@ -104,7 +102,6 @@ class SpotifyHandler(AudioSource):
             if not track:
                 return None
 
-            # ✅ FIXED: Handle None values in artists properly
             artists = []
             try:
                 artists_raw = track.get('artists', [])
@@ -112,7 +109,6 @@ class SpotifyHandler(AudioSource):
                     if artist and isinstance(artist, dict) and artist.get('name'):
                         artists.append(artist['name'])
 
-                # If no valid artists, use fallback
                 if not artists:
                     artists = ['Unknown Artist']
 
@@ -151,7 +147,6 @@ class SpotifyHandler(AudioSource):
                 logging.error("Expected track, got %s", content_type)
                 return None
 
-            # Get Spotify track info
             track_info = await asyncio.wait_for(
                 self.get_track_info(spotify_id),
                 timeout=5.0
@@ -161,7 +156,6 @@ class SpotifyHandler(AudioSource):
                 logging.error("Failed to get Spotify track info")
                 return None
 
-            # Convert to YouTube
             if self.youtube is not None:
                 return await self.search_youtube_for_track(track_info)
             else:
@@ -186,7 +180,6 @@ class SpotifyHandler(AudioSource):
             logging.info("[SPOTIFY PLAYLIST] Starting fast extraction: %s", playlist_id)
 
             try:
-                # Get playlist metadata quickly
                 playlist = await asyncio.wait_for(
                     loop.run_in_executor(None, self.spotify.playlist, playlist_id),
                     timeout=10.0
@@ -216,7 +209,6 @@ class SpotifyHandler(AudioSource):
 
             logging.info("[SPOTIFY PLAYLIST] Found %d tracks in '%s'", total_tracks, playlist['name'])
 
-            # ✅ EXTRACT ALL TRACKS QUICKLY
             tracks = []
             results = playlist['tracks']
 
@@ -227,11 +219,9 @@ class SpotifyHandler(AudioSource):
 
                     track = item['track']
 
-                    # ✅ Skip local files and unavailable tracks
                     if track.get('is_local'):
                         continue
 
-                    # ✅ FIXED: Handle None values in artists properly
                     artists = []
                     try:
                         artists_raw = track.get('artists', [])
@@ -241,7 +231,6 @@ class SpotifyHandler(AudioSource):
                         artist_str = 'Unknown Artist'
                         artists = ['Unknown Artist']
 
-                    # ✅ Create minimal track data with better error handling
                     track_data = {
                         'id': track['id'],
                         'name': track.get('name', 'Unknown Track'),
@@ -254,13 +243,11 @@ class SpotifyHandler(AudioSource):
 
                     tracks.append(track_data)
 
-                # Get next page if available
                 if results['next']:
                     results = await loop.run_in_executor(None, self.spotify.next, results)
                 else:
                     results = None
 
-                # Progress update
                 if len(tracks) % 50 == 0 and len(tracks) > 0:
                     logging.info("[SPOTIFY PLAYLIST] Processed %d/%d tracks...", len(tracks), total_tracks)
 
@@ -280,7 +267,6 @@ class SpotifyHandler(AudioSource):
     async def search_youtube_for_track(self, spotify_track: dict):
         """Convert a Spotify track to YouTube using the YouTube handler"""
         try:
-            # Build search query
             query_parts = [spotify_track['name']]
             if spotify_track['artists']:
                 query_parts.append(spotify_track['artists'][0])
@@ -288,7 +274,6 @@ class SpotifyHandler(AudioSource):
                 query_parts.append("official")
             query = ' '.join(query_parts)
 
-            # ✅ Fast search with timeout
             if self.youtube is not None:
                 song_data = await asyncio.wait_for(
                     self.youtube.search(query),
@@ -298,7 +283,6 @@ class SpotifyHandler(AudioSource):
                 song_data = None
 
             if song_data:
-                # Enhance with Spotify metadata
                 song_data.update({
                     'title': f"{spotify_track['name']} - {spotify_track['artist_str']}",
                     'uploader': spotify_track['artist_str'],
@@ -328,7 +312,6 @@ class SpotifyHandler(AudioSource):
             logging.info("[SPOTIFY PLAYLIST] Starting fast processing: %s", playlist_url)
             start_time = time.time()
 
-            # ✅ STEP 1: Fast metadata extraction only
             try:
                 playlist_info, spotify_tracks = await asyncio.wait_for(
                     self.get_playlist_info(spotify_id),
@@ -348,11 +331,9 @@ class SpotifyHandler(AudioSource):
             extraction_time = time.time() - start_time
             logging.info("[SPOTIFY PLAYLIST] Metadata extracted in %.2fs", extraction_time)
 
-            # ✅ STEP 2: Create queue entries WITHOUT YouTube conversion
             songs = []
             
             for i, track in enumerate(spotify_tracks, 1):
-                # ✅ Create song data that will be converted on-demand during playback
                 song_data = {
                     'id': f"spotify_{track['id']}",
                     'title': f"{track['name']} - {track['artist_str']}",
@@ -366,7 +347,6 @@ class SpotifyHandler(AudioSource):
                 }
                 songs.append(song_data)
 
-            # Update playlist info
             if playlist_info is not None:
                 playlist_info.update({
                     'valid_songs': len(songs),
@@ -425,5 +405,4 @@ class SpotifyHandler(AudioSource):
             else:
                 return {"success": False, "error": f"API error: {error_msg[:100]}"}
 
-# Create the global instance
 spotify_handler = SpotifyHandler()

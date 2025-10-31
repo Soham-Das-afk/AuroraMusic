@@ -250,6 +250,12 @@ Optional:
  - `AUTO_RESTART_TIME` — time for restart in HH:MM (default 06:00)
  - `AUTO_RESTART_TZ_OFFSET_MINUTES` — timezone offset in minutes (IST=330)
  - `CLEAR_CACHE_ON_START` — when true, delete all cached audio files on startup; when false (default), keep the cache across restarts
+ - `ENABLE_GLOBAL_COMMAND_SYNC` — allow global slash-command sync (true/false; default: false). Use with care to avoid rate limits.
+ - `COMMAND_SYNC_RETRIES` — number of retries for command sync attempts (default: 3)
+ - `COMMAND_SYNC_BACKOFF_BASE` — exponential backoff base for command sync retries (default: 1.5; delay = base ** attempt)
+ - `GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED` — if true, global command syncing will be deferred to an off-peak UTC window (default: false)
+ - `GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC` — start hour (UTC) for off-peak window (0–23; default: 2)
+ - `GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC` — end hour (UTC) for off-peak window (0–23; default: 5)
  
 ### Hosting your banner image (recommended options)
 

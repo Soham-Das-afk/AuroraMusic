@@ -5,7 +5,6 @@ from .spotify import spotify_handler
 from .youtube import youtube_handler  # ✅ Import the singleton instance
 import logging
 
-# ✅ Add input validation
 def validate_query(query: str) -> bool:
     """Validate search query for safety and efficiency"""
     if not query or len(query.strip()) == 0:
@@ -14,7 +13,6 @@ def validate_query(query: str) -> bool:
     if len(query) > 500:
         return False
     
-    # Check for malicious patterns
     malicious_patterns = [
         r'javascript:',
         r'<script',
@@ -27,7 +25,6 @@ def validate_query(query: str) -> bool:
         if re.search(pattern, query, re.IGNORECASE):
             return False
     
-    # URL validation
     if query.startswith(('http://', 'https://')):
         try:
             from urllib.parse import urlparse
@@ -47,80 +44,58 @@ def validate_query(query: str) -> bool:
 async def search_song(query: str) -> Optional[Dict[str, Any]]:
     """Universal song search with validation and optimization"""
     try:
-        # ✅ Input validation
         if not validate_query(query):
-            logging.debug("Invalid query: %s", query)
             return None
         
-        # ✅ Normalize YouTube URLs (shorts, etc.) before search
         if youtube_handler.is_url_supported(query):
             query = youtube_handler.clean_url(query)
         
-        # ✅ Determine source and route accordingly
         if spotify_handler.is_url_supported(query):
-            logging.debug("Routing to Spotify search")
             return await _search_spotify_song(query)
         elif youtube_handler.is_url_supported(query):
-            logging.debug("Routing to YouTube search")
             return await youtube_handler.search(query)
         else:
-            # Default to YouTube for text searches
-            logging.debug("Default routing to YouTube search")
             return await youtube_handler.search(query)
             
     except Exception as e:
-        logging.debug("Universal search error: %s", e)
         return None
 
 async def search_playlist(playlist_url: str) -> Tuple[Optional[Dict], List[Dict]]:
     """Universal playlist search with source detection"""
     try:
-        # ✅ Input validation
         if not validate_query(playlist_url):
-            logging.debug("Invalid playlist URL: %s", playlist_url)
             return None, []
         
-        # ✅ Route based on source
         if spotify_handler.is_url_supported(playlist_url):
-            logging.debug("Routing to Spotify playlist")
             return await spotify_handler.search_playlist(playlist_url)
         elif youtube_handler.is_url_supported(playlist_url):
-            logging.debug("Routing to YouTube playlist")
             return await youtube_handler.search_playlist(playlist_url)
         else:
-            logging.debug("Unsupported playlist URL: %s", playlist_url)
             return None, []
             
     except Exception as e:
-        logging.debug("Universal playlist search error: %s", e)
         return None, []
 
 async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
     """⚡ Fast Spotify to YouTube conversion"""
     try:
         if not spotify_handler.spotify:
-            logging.debug("Spotify client not available")
             return None
         
         content_type, spotify_id = spotify_handler.extract_spotify_id(spotify_url)
         
         if content_type != 'track' or not spotify_id:
-            logging.debug("Expected track, got %s", content_type)
             return None
         
-        # Get Spotify track info with timeout
         track_info = await asyncio.wait_for(
             spotify_handler.get_track_info(spotify_id),
             timeout=5.0  # 5 second timeout
         )
         
         if not track_info:
-            logging.debug("Failed to get Spotify track info")
             return None
         
-        # ⚡ Single optimized search strategy
         search_query = f"{track_info['name']} {track_info['artist_str']}"
-        logging.debug("Quick search: %s", search_query)
         
         song_data = await asyncio.wait_for(
             youtube_handler.search(search_query),
@@ -128,7 +103,6 @@ async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
         )
         
         if song_data:
-            # Enhance with Spotify metadata
             song_data.update({
                 'title': f"{track_info['name']} - {track_info['artist_str']}",
                 'uploader': track_info['artist_str'],
@@ -138,17 +112,13 @@ async def _search_spotify_song(spotify_url: str) -> Optional[Dict[str, Any]]:
                 'source': 'spotify->youtube'
             })
             
-            logging.debug("Found match quickly")
             return song_data
         
-        logging.debug("No YouTube match found")
         return None
         
     except asyncio.TimeoutError:
-        logging.debug("Spotify search timeout")
         return None
     except Exception as e:
-        logging.debug("Spotify song search error: %s", e)
         return None
 
 def is_playlist_url(url: str) -> bool:
@@ -157,18 +127,15 @@ def is_playlist_url(url: str) -> bool:
         if not url or not isinstance(url, str):
             return False
         
-        # ✅ Check Spotify playlists/albums
         if spotify_handler.is_url_supported(url):
             return 'playlist' in url.lower() or 'album' in url.lower()
         
-        # ✅ Check YouTube playlists
         if youtube_handler.is_url_supported(url):
             return youtube_handler.is_playlist_url(url)
         
         return False
         
     except Exception as e:
-        logging.debug("Playlist detection error: %s", e)
         return False
 
 def get_source_type(url: str) -> str:
@@ -189,7 +156,6 @@ def get_source_type(url: str) -> str:
     except Exception:
         return 'unknown'
 
-# ✅ Performance monitoring
 class SearchMetrics:
     """Track search performance metrics"""
     
@@ -230,5 +196,4 @@ class SearchMetrics:
             'avg_response_time': f"{self.avg_response_time:.2f}s"
         }
 
-# Global metrics instance
 search_metrics = SearchMetrics()

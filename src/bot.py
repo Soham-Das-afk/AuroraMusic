@@ -1,6 +1,6 @@
-import discord  # type: ignore
-from discord.ext import commands  # type: ignore
-from discord.utils import get  # type: ignore
+import discord
+from discord.ext import commands
+from discord.utils import get
 import asyncio
 import sys
 import logging
@@ -9,6 +9,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from config.settings import Config
 from utils.file_manager import FileManager
+
+# Setup logging with absolute path
+project_root = Path(__file__).parent.parent
+log_dir = project_root / 'logs'
+log_dir.mkdir(exist_ok=True)  # Ensure the logs directory exists
+log_file = log_dir / 'bot.log'
 
 class SafeConsoleFilter(logging.Filter):
     """Sanitize log records for consoles that can't render emojis/UTF-8."""
@@ -19,7 +25,6 @@ class SafeConsoleFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
         try:
-            # If the console can't encode it strictly, replace problematic chars
             msg.encode(self.encoding, errors='strict')
         except Exception:
             try:
@@ -27,17 +32,15 @@ class SafeConsoleFilter(logging.Filter):
                 record.msg = safe
                 record.args = ()
             except Exception:
-                # As a last resort, strip non-ASCII
                 record.msg = ''.join(ch if ord(ch) < 128 else '?' for ch in msg)
                 record.args = ()
         return True
 
-# Set up logging with UTF-8 file and safe console output
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-file_handler = logging.FileHandler('bot.log', encoding='utf-8')
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
 file_handler.setFormatter(formatter)
 
 console_handler = logging.StreamHandler()
@@ -52,11 +55,14 @@ class AuroraMusicBot(commands.Bot):
     """Main bot class for AuroraMusic"""
 
     def __init__(self, intents):
-        # Use a dummy prefix since we rely on slash commands and controller messages only
         super().__init__(command_prefix=commands.when_mentioned_or('!'), intents=intents, help_command=None)
+        self._commands_synced_global = False
+        self._command_sync_lock = None
 
     async def setup_hook(self):
         """Load cogs on startup"""
+        if self._command_sync_lock is None:
+            self._command_sync_lock = asyncio.Lock()
         cogs_to_load = [
             'cogs.music.music_cog',
             'cogs.admin'
@@ -68,25 +74,164 @@ class AuroraMusicBot(commands.Bot):
             except Exception as e:
                 logging.error(f"❌ Failed to load cog {cog}: {e}")
 
-        # Sync slash commands for faster availability
         try:
             if getattr(Config, 'ALLOWED_GUILD_IDS', []):
-                # Guild-specific sync for faster updates
                 for gid in Config.ALLOWED_GUILD_IDS:
                     try:
                         if not self.get_guild(gid):
                             logging.info(f"Skipping command sync for guild {gid} (bot not in guild)")
                             continue
-                        await self.tree.sync(guild=discord.Object(id=gid))  # type: ignore[attr-defined]
+                        await self._attempt_command_sync(guild=discord.Object(id=gid))
                         logging.info(f"✅ Synced app commands for guild {gid}")
                     except Exception as guild_sync_err:
                         logging.error(f"❌ Failed to sync commands for guild {gid}: {guild_sync_err}")
             else:
-                # Global sync
-                await self.tree.sync()
-                logging.info("✅ Synced app commands globally")
+                if getattr(Config, 'ENABLE_GLOBAL_COMMAND_SYNC', False):
+                    if getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED', False):
+                        if self._is_now_in_offpeak_window():
+                            await self._attempt_command_sync(guild=None, global_sync=True)
+                            logging.info("✅ Synced app commands globally (off-peak window)")
+                        else:
+                            try:
+                                if not hasattr(self, '_global_sync_task') or self._global_sync_task is None:
+                                    self._global_sync_task = asyncio.create_task(self._schedule_global_sync_at_offpeak())
+                                    logging.info("⏳ Global command sync scheduled for next off-peak window")
+                            except Exception as e:
+                                logging.error(f"Exception: {e}")
+                    else:
+                        await self._attempt_command_sync(guild=None, global_sync=True)
+                        logging.info("✅ Synced app commands globally (opt-in)")
+                else:
+                    logging.info("🔕 Global command sync skipped (ENABLE_GLOBAL_COMMAND_SYNC=false)")
         except Exception as sync_err:
             logging.error(f"❌ Failed to sync app commands: {sync_err}")
+
+    async def _attempt_command_sync(self, guild: discord.Object | None = None, global_sync: bool = False) -> None:
+        """Attempt to sync application commands with retries and exponential backoff.
+
+        Params in Config (optional):
+          - COMMAND_SYNC_RETRIES (int, default 3)
+          - COMMAND_SYNC_BACKOFF_BASE (float, default 1.5)
+        """
+        max_retries = int(getattr(Config, 'COMMAND_SYNC_RETRIES', 3))
+        backoff_base = float(getattr(Config, 'COMMAND_SYNC_BACKOFF_BASE', 1.5))
+
+        lock = getattr(self, '_command_sync_lock', None)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._command_sync_lock = lock
+
+        attempt = 0
+        async with lock:
+            while True:
+                try:
+                    if guild is None and global_sync:
+                        await self.tree.sync()
+                        self._commands_synced_global = True
+                    elif guild is None:
+                        await self.tree.sync()
+                        self._commands_synced_global = True
+                    else:
+                        await self.tree.sync(guild=guild)
+                    return
+                except Exception as e:
+                    attempt += 1
+                    if attempt > max_retries:
+                        logging.error(f"❌ Command sync failed after {attempt} attempts: {e}")
+                        raise
+                    delay = backoff_base ** attempt
+                    logging.warning(f"⚠️ Command sync attempt {attempt} failed: {e}. Retrying in {delay:.1f}s")
+                    try:
+                        await asyncio.sleep(delay)
+                    except asyncio.CancelledError:
+                        raise
+
+    def _is_now_in_offpeak_window(self) -> bool:
+        """Return True if current UTC hour is inside configured off-peak window.
+
+        Handles windows that wrap midnight (e.g., start=22, end=4).
+        """
+        try:
+            start = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC', 2))
+            end = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC', 5))
+        except Exception:
+            start, end = 2, 5
+        now_hour = datetime.now(timezone.utc).hour
+        if start <= end:
+            return start <= now_hour < end
+        else:
+            return now_hour >= start or now_hour < end
+
+    async def _schedule_global_sync_at_offpeak(self):
+        """Sleep until the next off-peak window start (UTC) and perform a global sync once.
+
+        This schedules a one-shot sync and sets `_commands_synced_global` when done.
+        """
+        try:
+            start = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC', 2))
+            end = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC', 5))
+        except Exception:
+            start, end = 2, 5
+
+        now = datetime.now(timezone.utc)
+
+        candidate = now.replace(hour=start, minute=0, second=0, microsecond=0)
+        if candidate <= now:
+            candidate = candidate + timedelta(days=1)
+
+        wait_seconds = (candidate - now).total_seconds()
+        logging.info(f"⏳ Waiting {int(wait_seconds)}s until next global command sync window at {candidate.isoformat()} UTC")
+        try:
+            await asyncio.sleep(max(1, wait_seconds))
+
+            window_end = candidate.replace(hour=end, minute=0, second=0, microsecond=0)
+            if start > end:
+                window_end = window_end + timedelta(days=1)
+
+            attempts = 0
+            max_attempts = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_MAX_ATTEMPTS_IN_WINDOW', 6))
+            retry_interval = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_RETRY_INTERVAL_SECONDS', 300))
+
+            while True:
+                now = datetime.now(timezone.utc)
+                if now >= window_end:
+                    logging.warning("⚠️ Off-peak window ended before successful global sync")
+                    break
+
+                if attempts >= max_attempts:
+                    logging.warning("⚠️ Reached max global sync attempts for this off-peak window")
+                    break
+
+                attempts += 1
+                try:
+                    await self._attempt_command_sync(guild=None, global_sync=True)
+                    self._commands_synced_global = True
+                    logging.info(f"✅ Global command sync completed at off-peak window (attempt {attempts})")
+                    break
+                except Exception as e:
+                    logging.warning(f"⚠️ Off-peak global sync attempt {attempts} failed: {e}")
+                    now = datetime.now(timezone.utc)
+                    time_left = (window_end - now).total_seconds()
+                    if time_left <= 0:
+                        logging.warning("⚠️ No time left in off-peak window for retries")
+                        break
+                    wait = min(retry_interval, max(1, int(time_left)))
+                    logging.info(f"⏳ Waiting {wait}s before next global sync attempt (attempt {attempts + 1})")
+                    try:
+                        await asyncio.sleep(wait)
+                    except asyncio.CancelledError:
+                        logging.info("⏹️ Global sync scheduler cancelled during sleep")
+                        return
+        except asyncio.CancelledError:
+            logging.info("⏹️ Global sync scheduler cancelled")
+            return
+        except Exception as e:
+            logging.error(f"❌ Off-peak global sync failed: {e}")
+        finally:
+            try:
+                self._global_sync_task = None
+            except Exception:
+                pass
 
     async def on_ready(self):
         """Bot ready event"""
@@ -94,14 +239,11 @@ class AuroraMusicBot(commands.Bot):
         logging.info(f"📡 Connected to {len(self.guilds)} servers")
         logging.info(f"👥 Serving {len(set(self.get_all_members()))} users")
 
-        # Helpful: print an invite URL with applications.commands scope (for slash commands)
         try:
             app_info = await self.application_info()
             client_id = app_info.id if hasattr(app_info, 'id') else None
             if client_id:
-                # scopes: bot + applications.commands; permissions minimal (send messages, manage messages, connect, speak)
                 perms = 0
-                # Send Messages (2048) | Manage Messages (8192) | Connect (1048576) | Speak (2097152)
                 perms |= 2048 | 8192 | 1048576 | 2097152
                 invite = (
                     f"https://discord.com/api/oauth2/authorize?client_id={client_id}"
@@ -109,15 +251,13 @@ class AuroraMusicBot(commands.Bot):
                 )
                 logging.info(f"🔗 Invite URL (with slash commands): {invite}")
         except Exception as e:
-            logging.debug(f"Invite URL generation failed: {e}")
+            logging.error(f"Exception: {e}")
 
-        # Leave unauthorized guilds
         for guild in self.guilds:
             if not Config.is_guild_allowed(guild.id):
                 logging.info(f"❌ Leaving unauthorized guild: {guild.name} ({guild.id})")
                 await guild.leave()
 
-        # Set status
         await self.change_presence(
             activity=discord.Activity(  # type: ignore[attr-defined]
                 type=discord.ActivityType.listening,  # type: ignore[attr-defined]
@@ -125,7 +265,6 @@ class AuroraMusicBot(commands.Bot):
             )
         )
 
-        # Optionally purge cached songs on restart (controlled by env)
         try:
             if getattr(Config, 'CLEAR_CACHE_ON_START', False):
                 fm = FileManager()
@@ -136,16 +275,14 @@ class AuroraMusicBot(commands.Bot):
                         f.unlink()
                         deleted += 1
                     except Exception as e:
-                        logging.debug(f"Could not delete cached file {f.name}: {e}")
+                        logging.error(f"Exception: {e}")
                 if deleted:
                     logging.info(f"🧹 Purged {deleted} cached audio file(s) on startup (CLEAR_CACHE_ON_START)")
             else:
                 logging.info("💾 Skipping startup cache purge (CLEAR_CACHE_ON_START=false)")
         except Exception as e:
-            logging.debug(f"Startup cache purge skipped: {e}")
+            logging.error(f"Exception: {e}")
 
-        # Schedule daily auto-restart based on configuration
-        # Ensure we only schedule this once per process
         if getattr(Config, 'AUTO_RESTART_ENABLED', True):
             if not hasattr(self, "_restart_task") or self._restart_task is None:
                 try:
@@ -159,38 +296,38 @@ class AuroraMusicBot(commands.Bot):
         else:
             logging.info("⏹️ Daily auto-restart disabled by configuration")
 
-        # After connecting, sync commands for guilds we're actually in
         try:
             for g in self.guilds:
                 if Config.is_guild_allowed(g.id):
                     try:
                         guild_obj = discord.Object(id=g.id)  # type: ignore[attr-defined]
-                        # Phase 1: clear existing guild commands remotely
                         try:
-                            # Clear local view for this guild, then sync to wipe remote
                             self.tree.clear_commands(guild=guild_obj)
-                            await self.tree.sync(guild=guild_obj)
-                            logging.info(f"🗑️ Cleared existing guild commands for {g.id}")
+                            await self._attempt_command_sync(guild=guild_obj)
+                            logging.info(f"🗑️ Cleared and republished guild commands for {g.id}")
                         except Exception as e:
-                            logging.debug(f"Clear existing commands failed for {g.id}: {e}")
-
-                        # Phase 2: copy current global commands into guild scope and sync
-                        try:
-                            self.tree.copy_global_to(guild=guild_obj)
-                            logging.info(f"📥 Copied global commands to guild {g.id} for fast availability")
-                        except Exception as e:
-                            logging.debug(f"copy_global_to failed for guild {g.id}: {e}")
-
-                        await self.tree.sync(guild=guild_obj)
-                        logging.info(f"✅ Republished app commands for guild {g.id}")
+                            logging.error(f"Exception: {e}")
                     except Exception as e:
                         logging.error(f"❌ Could not sync commands for guild {g.id}: {e}")
-            # Also attempt a global sync as a fallback for visibility issues
             try:
-                await self.tree.sync()
-                logging.info("🌐 Global command sync attempted (may take up to 1 hour to propagate)")
+                if getattr(Config, 'ENABLE_GLOBAL_COMMAND_SYNC', False) and not getattr(self, '_commands_synced_global', False):
+                    if getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED', False):
+                        if self._is_now_in_offpeak_window():
+                            await self._attempt_command_sync(guild=None, global_sync=True)
+                            logging.info("🌐 Global command sync attempted (off-peak)")
+                            self._commands_synced_global = True
+                        else:
+                            if not hasattr(self, '_global_sync_task') or self._global_sync_task is None:
+                                self._global_sync_task = asyncio.create_task(self._schedule_global_sync_at_offpeak())
+                                logging.info("⏳ Global command sync scheduled post-ready for next off-peak window")
+                    else:
+                        await self._attempt_command_sync(guild=None, global_sync=True)
+                        logging.info("🌐 Global command sync attempted (opt-in)")
+                        self._commands_synced_global = True
+                else:
+                    pass
             except Exception as e:
-                logging.debug(f"Global sync skipped/failed: {e}")
+                logging.error(f"Exception: {e}")
         except Exception as e:
             logging.error(f"❌ Post-ready sync error: {e}")
 
@@ -198,20 +335,17 @@ class AuroraMusicBot(commands.Bot):
         """Sleep until the next scheduled time (per config) and then restart the process. Repeats daily."""
         while True:
             try:
-                # Compute current time in UTC and apply configured offset without external tz database
                 now_utc = datetime.now(timezone.utc)
                 offset_minutes = int(getattr(Config, 'AUTO_RESTART_TZ_OFFSET_MINUTES', 330))
                 offset = timedelta(minutes=offset_minutes)
                 now_local = now_utc + offset
 
-                # Parse restart time HH:MM
                 time_str = getattr(Config, 'AUTO_RESTART_TIME', '06:00')
                 try:
                     hh, mm = [int(x) for x in time_str.split(':', 1)]
                 except Exception:
                     hh, mm = 6, 0
 
-                # Next scheduled time from now
                 target_local = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
                 if now_local >= target_local:
                     target_local = target_local + timedelta(days=1)
@@ -226,41 +360,34 @@ class AuroraMusicBot(commands.Bot):
 
                 logging.info("🔁 Performing scheduled daily restart")
                 await self._restart_process()
-                # If restart returns (unlikely), schedule next day again
             except asyncio.CancelledError:
                 logging.info("⏹️ Restart scheduler cancelled")
                 return
             except Exception as e:
                 logging.error(f"❌ Restart scheduler error: {e}")
-                # In case of error, wait 10 minutes and try to schedule again
                 await asyncio.sleep(600)
 
     async def _restart_process(self):
         """Gracefully close the bot and exec a fresh Python process for this script."""
         try:
-            # Flush logs first
             for handler in logging.getLogger().handlers:
                 try:
                     handler.flush()
                 except Exception:
                     pass
 
-            # Close Discord connection cleanly
             try:
                 await self.close()
             except Exception as e:
-                logging.debug(f"Close during restart encountered: {e}")
+                logging.error(f"Exception: {e}")
 
-            # Extra safety: explicitly close HTTP client/session if present
             try:
                 http = getattr(self, 'http', None)
                 if http and hasattr(http, 'close'):
                     await http.close()  # type: ignore[func-returns-value]
-                    logging.debug("HTTP client explicitly closed")
             except Exception as e:
-                logging.debug(f"HTTP close during restart encountered: {e}")
+                logging.error(f"Exception: {e}")
 
-            # Cancel lingering background tasks to avoid unclosed session warnings
             try:
                 loop = asyncio.get_running_loop()
                 current = asyncio.current_task()
@@ -270,15 +397,13 @@ class AuroraMusicBot(commands.Bot):
                 if tasks:
                     await asyncio.wait(tasks, timeout=0.5)
             except Exception as e:
-                logging.debug(f"Task cancellation during restart encountered: {e}")
+                logging.error(f"Exception: {e}")
 
-            # Give the event loop a brief moment to flush closures
             try:
                 await asyncio.sleep(0.1)
             except Exception:
                 pass
 
-            # Build exec arguments to relaunch this script
             python = sys.executable
             script_path = Path(__file__).resolve()
             args = [python, str(script_path)]
@@ -320,7 +445,6 @@ class AuroraMusicBot(commands.Bot):
                     logging.error(f"❌ Could not send contact message in {guild.name}: {e}")
             await guild.leave()
         else:
-            # For allowed guilds, ensure slash commands are synced immediately
             try:
                 await self.tree.sync(guild=discord.Object(id=guild.id))  # type: ignore[attr-defined]
                 logging.info(f"✅ Synced app commands for new guild {guild.id}")
@@ -332,12 +456,10 @@ class AuroraMusicBot(commands.Bot):
         if message.author.bot:
             return
 
-        # Block messages from unauthorized guilds
         if message.guild and not Config.is_guild_allowed(message.guild.id):
             logging.info(f"❌ Ignoring message from unauthorized guild: {message.guild.name} ({message.guild.id})")
             return
 
-        # Controller channel detection
         is_music_channel = False
         controller_info = None
 
@@ -358,10 +480,8 @@ class AuroraMusicBot(commands.Bot):
             except Exception as e:
                 logging.error(f"❌ Error checking controller channel: {e}")
 
-        # Only process music requests in controller channels
         if is_music_channel:
             content = message.content.strip()
-            # Ignore potential slash command text; real slash commands don't appear as messages
             if content and not content.startswith('/'):
                 logging.info(f"🎵 [CONTROLLER] Processing music request: {content}")
                 music_cog = self.get_cog('MusicCog')
@@ -369,7 +489,6 @@ class AuroraMusicBot(commands.Bot):
                     await music_cog.handle_song_request(message, content)  # type: ignore[attr-defined]
                 else:
                     logging.error("❌ [CONTROLLER] MusicCog not available!")
-                    # Best-effort delete to keep controller clean
                     try:
                         await message.delete()
                         logging.info("✅ [CONTROLLER] Deleted message (MusicCog unavailable)")
@@ -377,9 +496,6 @@ class AuroraMusicBot(commands.Bot):
                         logging.error(f"❌ Error deleting message: {del_error}")
             return
         else:
-            # Ignore messages in non-controller channels (slash commands handled separately)
-            # Reduce noise: log at debug level only
-            logging.debug(f"[NORMAL] Ignoring non-controller message in #{message.channel.name}")
             return
 
     async def on_voice_state_update(self, member, before, after):
@@ -390,7 +506,6 @@ class AuroraMusicBot(commands.Bot):
             human_members = [m for m in before.channel.members if not m.bot]
             if len(human_members) == 0:
                 await asyncio.sleep(300)
-                # Re-check after waiting to ensure the bot is still alone
                 if before.channel and self.user in before.channel.members:
                     voice_client = get(self.voice_clients, channel=before.channel)
                     if voice_client:
@@ -423,7 +538,6 @@ async def main():
         intents.message_content = True
         intents.voice_states = True
         intents.guilds = True
-        # Use the correct intents attribute for message events
         intents.messages = True
         bot = AuroraMusicBot(intents=intents)
         token = Config.BOT_TOKEN or ""

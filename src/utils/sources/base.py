@@ -34,13 +34,9 @@ class AudioSource(ABC):
     
     def clean_filename(self, filename: str) -> str:
         """Clean filename for filesystem safety"""
-        # Remove invalid characters
         cleaned = re.sub(r'[<>:"/\\|?*]', '', filename)
-        # FIXED: Proper escaping
         cleaned = re.sub(r'[^\w\s\-\.]', '', cleaned)  # Escape the hyphen
-        # Normalize whitespace
         cleaned = re.sub(r'\s+', '_', cleaned.strip())
-        # Limit length
         return cleaned[:100] if len(cleaned) > 100 else cleaned
     
     def validate_url(self, url: str) -> bool:
@@ -99,7 +95,6 @@ class BaseDownloader:
             
             return True
         except Exception as e:
-            logging.debug("Error validating file: %s", e)
             return False
 
 class PlaylistSource(ABC):

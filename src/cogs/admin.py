@@ -3,18 +3,13 @@ from discord.ext import commands  # type: ignore
 from discord import app_commands  # type: ignore
 import json
 import os
-import traceback
-from pathlib import Path
-import time
 import logging
 from .music.controller import ControllerManager
 from typing import Any, cast
 from config.settings import Config
 
-# Help type checker: treat discord as Any to avoid attr-not-found noise while keeping runtime intact
 discord = cast(Any, discord)
 
-# Controller data storage
 CONTROLLER_DATA_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'controller_data.json')
 
 def load_controller_data():
@@ -39,11 +34,9 @@ def save_controller_data(data):
 class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
     def __init__(self):
         super().__init__(timeout=None)
-        logging.debug("MusicControlView initialized")
 
     @discord.ui.button(emoji='⏮️', label='Previous', style=discord.ButtonStyle.secondary, custom_id='music_previous', row=0)  # type: ignore[attr-defined]
     async def previous(self, interaction: Any, button: Any):
-        logging.debug("Previous button clicked by %s", interaction.user)
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_previous'):
@@ -51,20 +44,17 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in previous button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in previous button: {e}")
             try:
                 await interaction.response.send_message("❌ Previous failed!", ephemeral=True)
             except Exception as e2:
-                logging.debug("Failed to send error message: %s", e2)
+                logging.error(f"Failed to send error message: {e2}")
 
     @discord.ui.button(emoji='⏯️', label='Play/Pause', style=discord.ButtonStyle.primary, custom_id='music_play_pause', row=0)  # type: ignore[attr-defined]
     async def play_pause(self, interaction: Any, button: Any):
-        logging.debug("Play/Pause button clicked by %s", interaction.user)
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_play_pause'):
-                # Update label based on current state
                 vc = interaction.guild.voice_client if interaction.guild else None
                 if vc and vc.is_playing():
                     button.label = 'Pause'
@@ -79,16 +69,14 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in play_pause button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in play_pause button: {e}")
             try:
                 await interaction.response.send_message("❌ Play/Pause failed!", ephemeral=True)
             except Exception as e2:
-                logging.debug("Failed to send error message: %s", e2)
+                logging.error(f"Failed to send error message: {e2}")
 
     @discord.ui.button(emoji='⏭️', label='Skip', style=discord.ButtonStyle.secondary, custom_id='music_skip', row=0)  # type: ignore[attr-defined]
     async def skip(self, interaction: Any, button: Any):
-        logging.debug("Skip button triggered")
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_skip'):
@@ -96,12 +84,10 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in skip button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in skip button: {e}")
 
     @discord.ui.button(emoji='⏹️', label='Stop', style=discord.ButtonStyle.danger, custom_id='music_stop', row=0)  # type: ignore[attr-defined]
     async def stop(self, interaction: Any, button: Any):
-        logging.debug("Stop button clicked by %s", interaction.user)
         try:
             music_cog = interaction.client.get_cog('MusicCog')
             if music_cog and hasattr(music_cog, 'handle_stop'):
@@ -109,12 +95,11 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in stop button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in stop button: {e}")
             try:
                 await interaction.response.send_message("❌ Stop failed!", ephemeral=True)
             except Exception as e2:
-                logging.debug("Failed to send error message: %s", e2)
+                logging.error(f"Failed to send error message: {e2}")
 
     @discord.ui.button(emoji='⏪', label='Rewind 10s', style=discord.ButtonStyle.primary, custom_id='music_rewind', row=1)  # type: ignore[attr-defined]
     async def rewind(self, interaction: Any, button: Any):
@@ -125,8 +110,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in rewind button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in rewind button: {e}")
 
     @discord.ui.button(emoji='⏩', label='Forward 10s', style=discord.ButtonStyle.primary, custom_id='music_forward', row=1)  # type: ignore[attr-defined]
     async def forward(self, interaction: Any, button: Any):
@@ -137,8 +121,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in forward button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in forward button: {e}")
 
     @discord.ui.button(emoji='🔊', label='Volume', style=discord.ButtonStyle.secondary, custom_id='music_volume', row=1)  # type: ignore[attr-defined]
     async def volume(self, interaction: Any, button: Any):
@@ -149,8 +132,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in volume button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in volume button: {e}")
 
     @discord.ui.button(emoji='🔁', label='Loop', style=discord.ButtonStyle.secondary, custom_id='music_loop', row=2)  # type: ignore[attr-defined]
     async def loop_mode(self, interaction: Any, button: Any):
@@ -161,8 +143,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in loop button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in loop button: {e}")
 
     @discord.ui.button(emoji='🔀', label='Shuffle', style=discord.ButtonStyle.secondary, custom_id='music_shuffle', row=2)  # type: ignore[attr-defined]
     async def shuffle(self, interaction: Any, button: Any):
@@ -173,12 +154,10 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             else:
                 await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
         except Exception as e:
-            logging.debug("Exception in shuffle button: %s", e)
-            traceback.print_exc()
+            logging.error(f"Exception in shuffle button: {e}")
 
     @discord.ui.button(emoji='🔄', label='AutoPlay', style=discord.ButtonStyle.secondary, custom_id='music_autoplay', row=2)  # type: ignore[attr-defined]
     async def autoplay(self, interaction: Any, button: Any):
-        logging.debug("AutoPlay button clicked by %s", interaction.user)
         await interaction.response.send_message("🔄 AutoPlay feature coming soon!", ephemeral=True)
 
     def create_controller_embed(self, song_data, status, queue):
@@ -316,13 +295,10 @@ class AdminCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.controller_data = load_controller_data()
-        logging.debug("AdminCog initialized")
 
     async def cog_load(self):
-        logging.debug("AdminCog loaded - Adding persistent view")
         view = MusicControlView()
         self.bot.add_view(view)
-        logging.debug("Added %s to bot.persistent_views", type(view).__name__)
 
     
 
@@ -351,18 +327,14 @@ class AdminCog(commands.Cog):
                 overwrites=overwrites,
                 topic="🎵 AuroraMusic Controller • Send songs here to play them!"
             )
-            # Use ControllerManager for banner and controller embeds for consistency
             manager = ControllerManager(interaction.client.get_cog('MusicCog'))
             bot_banner_url = await manager._get_banner_url()
 
             banner_embed = discord.Embed(title="🎵 Welcome to AuroraMusic!")  # type: ignore[attr-defined]
             banner_embed.set_footer(text="Developed by @sick._.duck.103 on Discord")
-            # Show banner image only if enabled and URL present
             if getattr(Config, 'SHOW_BANNER', True) and bot_banner_url:
                 banner_embed.set_image(url=bot_banner_url)
             banner_msg = await channel.send(embed=banner_embed)
-            # Build the same controller embed used during live updates
-            # Fake a minimal queue-like object for initial state
             class _InitialQueue:
                 volume = 100
                 loop_mode = False
@@ -376,7 +348,6 @@ class AdminCog(commands.Cog):
                 queue=_InitialQueue(),
                 bot_banner_url=bot_banner_url
             )
-            # Do not set any image on the controller embed (controller-only content)
             view = MusicControlView()
             controller_msg = await channel.send(embed=controller_embed, view=view)
             self.controller_data[guild_id_str] = {
@@ -398,8 +369,7 @@ class AdminCog(commands.Cog):
             )
             await interaction.followup.send(embed=success_embed)
         except Exception as e:
-            logging.error("Setup error: %s", e)
-            traceback.print_exc()
+            logging.error(f"Setup error: {e}")
             await interaction.followup.send(f"❌ Setup failed: {str(e)}", ephemeral=True)
 
     @app_commands.command(name="ping", description="Check if the bot is responsive")
@@ -447,7 +417,6 @@ class AdminCog(commands.Cog):
 
         try:
             if channel:
-                # Try delete controller message
                 if controller_msg_id:
                     try:
                         msg = await channel.fetch_message(controller_msg_id)
@@ -455,7 +424,6 @@ class AdminCog(commands.Cog):
                         deleted_any = True
                     except Exception as e:
                         errors.append(f"controller message: {e}")
-                # Try delete banner message
                 if banner_msg_id:
                     try:
                         msg = await channel.fetch_message(banner_msg_id)
@@ -464,7 +432,6 @@ class AdminCog(commands.Cog):
                     except Exception as e:
                         errors.append(f"banner message: {e}")
 
-                # Optionally delete channel
                 if delete_channel:
                     try:
                         await channel.delete(reason="AuroraMusic cleanup requested")
@@ -472,7 +439,6 @@ class AdminCog(commands.Cog):
                     except Exception as e:
                         errors.append(f"channel delete: {e}")
         finally:
-            # Remove saved entry regardless of deletion success
             self.controller_data.pop(guild_id_str, None)
             save_controller_data(self.controller_data)
 
@@ -492,12 +458,10 @@ class AdminCog(commands.Cog):
         from config.settings import Config
         await interaction.response.defer(ephemeral=True)
 
-        # Config checks
         allowed = Config.is_guild_allowed(interaction.guild.id)
         cookies_path = Config.get_cookies_path()
         has_spotify = bool(Config.SPOTIFY_CLIENT_ID and Config.SPOTIFY_CLIENT_SECRET)
 
-        # Queue info
         queue_summary = "N/A"
         music_cog = interaction.client.get_cog('MusicCog')
         if music_cog and hasattr(music_cog, 'get_queue'):
@@ -519,7 +483,6 @@ class AdminCog(commands.Cog):
         embed.add_field(name="Spotify", value="✅ Enabled" if has_spotify else "⚠️ Disabled", inline=True)
         embed.add_field(name="Queue", value=queue_summary, inline=False)
 
-        # Controller presence
         data = self.controller_data
         entry = data.get(str(interaction.guild.id))
         if entry:
@@ -536,7 +499,6 @@ class AdminCog(commands.Cog):
     @app_commands.command(name="help", description="Show AuroraMusic usage and commands")
     async def help_slash(self, interaction: discord.Interaction):  # type: ignore
         await interaction.response.defer(ephemeral=True)
-        # Determine controller channel for this guild
         controller_hint = "Use `/setup` to create a music controller channel."
         try:
             entry = self.controller_data.get(str(interaction.guild.id))
@@ -560,7 +522,6 @@ class AdminCog(commands.Cog):
             "• `/cleanup` — remove controller (admin only)\n"
         )
 
-        # Add permission warning if bot can't manage messages in the controller channel
         try:
             entry = self.controller_data.get(str(interaction.guild.id))
             warn_text = None
@@ -577,7 +538,6 @@ class AdminCog(commands.Cog):
         embed = discord.Embed(title="🎵 AuroraMusic Help", description=description, color=0x7289da)  # type: ignore[attr-defined]
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ✅ REQUIRED: Add setup function
 async def setup(bot):
     """Setup function for the admin cog"""
     try:
@@ -585,6 +545,5 @@ async def setup(bot):
         await bot.add_cog(cog)
         logging.info("AdminCog setup complete: %s", cog)
     except Exception as e:
-        logging.error("Error setting up AdminCog: %s", e)
-        traceback.print_exc()
+        logging.error(f"Error setting up AdminCog: {e}")
         raise
