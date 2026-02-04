@@ -279,7 +279,7 @@ Try sending a song name or link to continue.
                 """,
                 color=0x7289da
             )
-    
+
     def format_duration(self, seconds):
         """Format duration in MM:SS format"""
         try:
@@ -300,14 +300,14 @@ class AdminCog(commands.Cog):
         view = MusicControlView()
         self.bot.add_view(view)
 
-    
+
 
     @app_commands.command(name="setup", description="Set up the music bot with a dedicated channel")
     @app_commands.describe(
         channel_name="Name for the music channel (default: 'aurora-music')",
         category="Category to create the channel in"
     )
-    async def setup_slash(self, interaction: discord.Interaction, channel_name: str = "aurora-music", category: discord.CategoryChannel = None): # type: ignore
+    async def setup_slash(self, interaction: discord.Interaction, channel_name: str = "aurora-music", category: discord.abc.GuildChannel = None): # type: ignore
         await interaction.response.defer()
         if not interaction.user.guild_permissions.administrator:
             await interaction.followup.send("❌ You need administrator permissions!", ephemeral=True)
@@ -316,6 +316,10 @@ class AdminCog(commands.Cog):
         if guild_id_str in self.controller_data:
             await interaction.followup.send("❌ Music controller already exists! Use `/cleanup` first.", ephemeral=True)
             return
+        
+        # If a channel was provided, but it's not a category, treat it as if no category was given.
+        actual_category = category if isinstance(category, discord.CategoryChannel) else None
+
         try:
             overwrites = {
                 interaction.guild.default_role: discord.PermissionOverwrite(send_messages=True, read_messages=True),  # type: ignore[attr-defined]
@@ -323,7 +327,7 @@ class AdminCog(commands.Cog):
             }
             channel = await interaction.guild.create_text_channel(
                 name=channel_name,
-                category=category,
+                category=actual_category,
                 overwrites=overwrites,
                 topic="🎵 AuroraMusic Controller • Send songs here to play them!"
             )
@@ -389,7 +393,7 @@ class AdminCog(commands.Cog):
         except Exception:
             ver = '3.2.37'
         embed.add_field(name="🔧 Version", value=f"AuroraMusic v{ver}", inline=True)
-        
+
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="cleanup", description="Remove the music controller and clear saved data")

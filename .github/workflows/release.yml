@@ -9,21 +9,25 @@ on:
       ref:
         description: 'Git ref (tag/branch) to release'
         required: false
-
+#wdvcwer
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # allow creating GitHub Releases
+      contents: write
       packages: write
+
+    env:
+      DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
 
-      # --- Pre-build validation: Python environment & code syntax ---
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -58,30 +62,30 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ env.DOCKER_TOKEN }}
 
       - name: Extract version from tag
         id: vars
         run: |
-          ref_name="${GITHUB_REF_NAME}"
-          if [ -n "${{ inputs.ref }}" ]; then ref_name="${{ inputs.ref }}"; fi
-          # strip leading 'refs/tags/' if present
+          ref_name="${{ inputs.ref }}"
+          [ -z "$ref_name" ] && ref_name="${GITHUB_REF_NAME}"
+          
           ref_name=${ref_name#refs/tags/}
           version=${ref_name#v}
+          
           echo "ref_name=$ref_name" >> $GITHUB_OUTPUT
           echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          # Build multi-architecture image (amd64 + arm64)
           platforms: linux/amd64,linux/arm64
           tags: |
             sohamdas103/auroramusic:${{ steps.vars.outputs.version }}
@@ -89,15 +93,13 @@ jobs:
           provenance: false
 
       - name: Inspect multi-arch manifest
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         run: |
-          echo "Inspecting manifest for version tag"
+          echo "Inspecting manifest for version tag..."
           docker buildx imagetools inspect sohamdas103/auroramusic:${{ steps.vars.outputs.version }}
-          echo "Inspecting manifest for latest tag"
-          docker buildx imagetools inspect sohamdas103/auroramusic:latest
 
       - name: Trivy image vulnerability scan
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         uses: aquasecurity/trivy-action@0.24.0
         continue-on-error: true
         with:
@@ -108,26 +110,26 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Install syft (SBOM tool)
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
           syft version
 
       - name: Generate SBOM (SPDX JSON)
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         run: |
           syft packages docker:sohamdas103/auroramusic:${{ steps.vars.outputs.version }} -o spdx-json > sbom-${{ steps.vars.outputs.version }}.spdx.json
           ls -l sbom-${{ steps.vars.outputs.version }}.spdx.json
 
       - name: Upload SBOM artifact
-        if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKER_USER && env.DOCKER_TOKEN
         uses: actions/upload-artifact@v4
         with:
           name: sbom-${{ steps.vars.outputs.version }}
           path: sbom-${{ steps.vars.outputs.version }}.spdx.json
 
       - name: Skip Docker push (secrets missing)
-        if: ${{ !(secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN) }}
+        if: ${{ !env.DOCKER_USER || !env.DOCKER_TOKEN }}
         run: |
           echo "DockerHub secrets not configured. Skipping Docker build/push."
 
@@ -137,31 +139,44 @@ jobs:
           version="${{ steps.vars.outputs.version }}"
           tag="${{ steps.vars.outputs.ref_name }}"
           notes_file="release-notes/v${version}.md"
-          echo "Preparing release body for ${tag} (version ${version})"
           body_tmp="/tmp/release_body.md"
+          
+          echo "Preparing release body for ${tag} (version ${version})"
+          
           echo "# AuroraMusic ${tag}" > "$body_tmp"
-          echo >> "$body_tmp"
+          echo "" >> "$body_tmp"
+          
           if [ -f "$notes_file" ]; then
             echo "Including release-notes file: $notes_file"
             cat "$notes_file" >> "$body_tmp"
-            echo >> "$body_tmp"
+            echo "" >> "$body_tmp"
           else
-            echo "(No dedicated release-notes/v${version}.md file found)" >> "$body_tmp"
-            echo >> "$body_tmp"
+            echo "_Automated Release_" >> "$body_tmp"
+            echo "" >> "$body_tmp"
           fi
+          
           echo "## Recent Commits" >> "$body_tmp"
-          git --no-pager log -15 --pretty='- %h %s (%an)' --no-merges >> "$body_tmp" || true
-          echo >> "$body_tmp"
-          echo '## Docker Images' >> "$body_tmp"
-          echo "Published:\n- sohamdas103/auroramusic:${version}\n- sohamdas103/auroramusic:latest" >> "$body_tmp"
-          echo >> "$body_tmp"
-          echo '## Verification' >> "$body_tmp"
-          echo "Multi-arch manifest includes (expected): linux/amd64, linux/arm64" >> "$body_tmp"
-          if [ -f sbom-${version}.spdx.json ]; then
-            echo >> "$body_tmp"
-            echo '## SBOM' >> "$body_tmp"
-            echo "An SPDX SBOM (sbom-${version}.spdx.json) is attached to this release." >> "$body_tmp"
-          fi
+          git --no-pager log -15 --pretty='- %h %s (%an)' --no-merges >> "$body_tmp" || echo "No git log available" >> "$body_tmp"
+          echo "" >> "$body_tmp"
+          
+          {
+            echo "## Docker Images"
+            echo "Published:"
+            echo "- \`sohamdas103/auroramusic:${version}\`"
+            echo "- \`sohamdas103/auroramusic:latest\`"
+            echo ""
+          } >> "$body_tmp"
+          
+          {
+            echo "## Verification"
+            echo "Multi-arch manifest includes: \`linux/amd64\`, \`linux/arm64\`"
+            if [ -f "sbom-${version}.spdx.json" ]; then
+              echo ""
+              echo "## SBOM"
+              echo "An SPDX SBOM (\`sbom-${version}.spdx.json\`) is attached to this release."
+            fi
+          } >> "$body_tmp"
+
           echo "body_path=$body_tmp" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release

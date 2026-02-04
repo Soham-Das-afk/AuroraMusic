@@ -13,7 +13,7 @@ from typing import Optional, Dict, List, Tuple, Any
 from config.settings import Config
 
 class YouTubeHandlerSingleton:
-    """Singleton YouTube handler with connection pooling and search/download pools."""
+    """Singleton YouTube handler for YouTube extraction and streaming."""
 
     _instance = None
     _initialized = False
@@ -25,21 +25,11 @@ class YouTubeHandlerSingleton:
 
     def __init__(self):
         if not self._initialized:
-            self._download_pool = {}
             self._search_pool = {}
-            self.downloads_dir = Config.DOWNLOADS_DIR
-            try:
-                self.downloads_dir.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                fallback = Path(__file__).parent.parent.parent / "downloads"
-                fallback.mkdir(parents=True, exist_ok=True)
-                self.downloads_dir = fallback
-            self.download_semaphore = asyncio.Semaphore(1)  # Limit concurrent downloads
             self._initialized = True
 
     def _cleanup_old_instances(self):
         self._search_pool.clear()
-        self._download_pool.clear()
 
     def _get_search_instance(self, use_cookies: bool = True):
         """Get search instance optimized for Oracle Cloud"""
@@ -56,17 +46,15 @@ class YouTubeHandlerSingleton:
                 'retries': 1,
                 'extractor_args': {
                     'youtube': {
-                        'player_client': ['web', 'ios'],
-                        'player_skip': ['configs'],
+                        'player_client': ['web', 'ios', 'android'],
+                        'player_skip': ['hls', 'dash'],
                     }
                 },
                 'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                    'Accept': '*/*',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Accept-Encoding': 'gzip, deflate, br',
-                    'Origin': 'https://www.youtube.com',
-                    'Referer': 'https://www.youtube.com/',
                 },
                 'sleep_interval': 2,
                 'max_sleep_interval': 5,
@@ -82,84 +70,18 @@ class YouTubeHandlerSingleton:
             self._search_pool[cache_key] = yt_dlp.YoutubeDL(opts)  # type: ignore[arg-type]
         return self._search_pool[cache_key]
 
-    def _get_download_instance(self, use_cookies: bool = True):
-        """Get cached download instance with robust format fallbacks"""
-        cache_key = f"download_{use_cookies}_{int(time.time() // 600)}"
-        if cache_key not in self._download_pool:
-            opts = {
-                'format': (
-                    'bestaudio[ext=m4a][filesize<25M]/'
-                    'bestaudio[ext=webm][filesize<25M]/'
-                    'bestaudio[filesize<25M]/'
-                    'best[filesize<25M]/'
-                    'bestaudio/best'
-                ),
-                'outtmpl': str(self.downloads_dir / '%(title)s_%(id)s.%(ext)s'),
-                'concurrent_fragment_downloads': 1,
-                'http_chunk_size': 1048576,
-                'retries': 3,
-                'fragment_retries': 3,
-                'socket_timeout': 30,
-                'keepvideo': False,
-                'restrictfilenames': True,
-                'overwrites': False,  # do not re-download if file exists
-                'no_warnings': True,
-                'ignoreerrors': True,
-                'logtostderr': False,
-                'quiet': True,
-                'no_playlist': True,
-                'extractaudio': True,
-                'audioformat': 'mp3',
-                'audioquality': '96K',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '96',
-                }],
-                'prefer_ffmpeg': True,
-                'buffersize': 1024,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                },
-                'geo_bypass': True,
-                'geo_bypass_country': None,
-                'age_limit': 99,
-            }
+    def _get_stream_instance(self, use_cookies: bool = True):
+        cache_key = f"stream_{use_cookies}_{int(time.time() // 600)}"
+        if cache_key not in self._search_pool:
+            opts = Config.YTDL_FORMAT_OPTS.copy()
             if use_cookies:
                 cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
                 if cookies_file and Path(cookies_file).exists():
                     opts['cookiefile'] = str(cookies_file)
-            self._download_pool[cache_key] = yt_dlp.YoutubeDL(opts)  # type: ignore[arg-type]
-        return self._download_pool[cache_key]
+            self._search_pool[cache_key] = yt_dlp.YoutubeDL(opts)
+        return self._search_pool[cache_key]
 
-    def find_cached_file(self, video_id: str) -> Optional[Path]:
-        """Return path to a cached mp3 for the given video id if present."""
-        try:
-            for p in self.downloads_dir.glob(f"*_{video_id}.mp3"):
-                if p.exists() and p.stat().st_size > 0:
-                    return p
-        except Exception:
-            pass
-        return None
-
-    async def download_audio(self, url: str, *, use_cookies: bool = True) -> Optional[Path]:
-        """Download audio to file using yt-dlp and return the resulting mp3 path."""
-        async with self.download_semaphore:
-            try:
-                loop = asyncio.get_event_loop()
-                ytdl = self._get_download_instance(use_cookies=use_cookies)
-                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=True))
-                if not data:
-                    return None
-                if isinstance(data, dict) and data.get('entries'):
-                    data = data['entries'][0]
-                vid = data.get('id') if isinstance(data, dict) else None
-                if vid:
-                    return self.find_cached_file(vid)
-                return None
-            except Exception as e:
-                logging.warning(f"⚠️ Download failed for {url}: {e}")
-                return None
+    
 
     def is_url_supported(self, url: str) -> bool:
         return bool(re.search(r'(youtube\.com|youtu\.be)', url, re.IGNORECASE))
@@ -199,60 +121,67 @@ class YouTubeHandlerSingleton:
         return cleaned[:100] if len(cleaned) > 100 else cleaned
 
     async def search(self, query: str) -> Optional[Dict[str, Any]]:
-        try:
-            loop = asyncio.get_event_loop()
-            if query.startswith(('http://', 'https://')):
-                search_query = self.clean_url(query)
-            else:
-                search_query = f"ytsearch:{query}"
-            logging.info(f"🔍 YouTube search: {query}")
+        for attempt in range(3):  # Retry up to 3 times
             try:
-                result = await self._web_based_search(query)
-                if result:
-                    logging.info("✅ Web-based search successful")
-                    return result
-            except Exception as e:
-                logging.warning(f"⚠️ Web-based search failed: {e}")
-            extraction_strategies = [
-                ('web_client', {'extractor_args': {'youtube': {'player_client': ['web']}}}),
-                ('ios_client', {'extractor_args': {'youtube': {'player_client': ['ios']}}}),
-                ('android_client', {'extractor_args': {'youtube': {'player_client': ['android']}}}),
-                ('minimal', {'format': 'worst', 'quiet': True})
-            ]
-            for strategy_name, extra_opts in extraction_strategies:
+                loop = asyncio.get_event_loop()
+                if query.startswith(('http://', 'https://')):
+                    search_query = self.clean_url(query)
+                else:
+                    search_query = f"ytsearch:{query}"
+                logging.info(f"🔍 YouTube search: {query}")
                 try:
-                    logging.info(f"🔍 Trying extraction strategy: {strategy_name}")
-                    base_instance = self._get_search_instance(use_cookies=True)
-                    base_opts = dict(getattr(base_instance, 'params', {}) or {})
-                    base_opts.update(extra_opts)
-                    ytdl_tmp = yt_dlp.YoutubeDL(base_opts)  # type: ignore[arg-type]
-                    data = await asyncio.wait_for(
-                        loop.run_in_executor(None, lambda: ytdl_tmp.extract_info(search_query, download=False)),
-                        timeout=8.0
-                    )
-                    if data and 'entries' in data and data['entries']:
-                        entries = data.get('entries') or []
-                        if not isinstance(entries, list):
-                            entries = []
-                        for entry in entries:
-                            if entry and entry.get('id'):
-                                result = self._format_song_data(entry)
-                                logging.info(f"✅ Found with strategy: {strategy_name}")
-                                return result
-                except asyncio.TimeoutError:
-                    logging.warning(f"⏰ Timeout with strategy: {strategy_name}")
-                    continue
+                    result = await self._web_based_search(query)
+                    if result:
+                        logging.info("✅ Web-based search successful")
+                        return result
                 except Exception as e:
-                    if 'bot' in str(e).lower():
-                        logging.warning(f"🤖 Bot detection with strategy: {strategy_name}")
+                    logging.warning(f"⚠️ Web-based search failed: {e}")
+                extraction_strategies = [
+                    ('web_client', {'extractor_args': {'youtube': {'player_client': ['web']}}}),
+                    ('ios_client', {'extractor_args': {'youtube': {'player_client': ['ios']}}}),
+                    ('android_client', {'extractor_args': {'youtube': {'player_client': ['android']}}}),
+                    ('minimal', {'format': 'worst', 'quiet': True})
+                ]
+                for strategy_name, extra_opts in extraction_strategies:
+                    try:
+                        logging.info(f"🔍 Trying extraction strategy: {strategy_name}")
+                        base_instance = self._get_search_instance(use_cookies=True)
+                        base_opts = dict(getattr(base_instance, 'params', {}) or {})
+                        base_opts.update(extra_opts)
+                        ytdl_tmp = yt_dlp.YoutubeDL(base_opts)  # type: ignore[arg-type]
+                        data = await asyncio.wait_for(
+                            loop.run_in_executor(None, lambda: ytdl_tmp.extract_info(search_query, download=False)),
+                            timeout=8.0
+                        )
+                        if data and 'entries' in data and data['entries']:
+                            entries = data.get('entries') or []
+                            if not isinstance(entries, list):
+                                entries = []
+                            for entry in entries:
+                                if entry and entry.get('id'):
+                                    result = self._format_song_data(entry)
+                                    logging.info(f"✅ Found with strategy: {strategy_name}")
+                                    return result
+                    except asyncio.TimeoutError:
+                        logging.warning(f"⏰ Timeout with strategy: {strategy_name}")
                         continue
-                    else:
-                        logging.warning(f"⚠️ Error with strategy: {strategy_name}: {e}")
-                        continue
-            return await self._create_searchable_fallback(query)
-        except Exception as e:
-            logging.error(f"❌ Search error: {e}")
-            return None
+                    except Exception as e:
+                        if 'bot' in str(e).lower():
+                            logging.warning(f"🤖 Bot detection with strategy: {strategy_name}")
+                            continue
+                        else:
+                            logging.warning(f"⚠️ Error with strategy: {strategy_name}: {e}")
+                            continue
+                return await self._create_searchable_fallback(query)
+            except Exception as e:
+                logging.error(f"❌ Search error on attempt {attempt + 1}: {e}")
+                if attempt < 2:
+                    logging.info(f"Retrying in {2 * (attempt + 1)} seconds...")
+                    await asyncio.sleep(2 * (attempt + 1))
+                else:
+                    logging.error("❌ All search attempts failed.")
+                    return None
+        return None
 
     async def _web_based_search(self, query: str) -> Optional[Dict[str, Any]]:
         """Web scraping fallback for bot detection"""
@@ -268,20 +197,20 @@ class YouTubeHandlerSingleton:
                     'Connection': 'keep-alive',
                 }
             ) as session:
-                
+
                 search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
-                
+
                 async with session.get(search_url) as response:
                     if response.status == 200:
                         html = await response.text()
-                        
+
                         match = re.search(r'var ytInitialData = ({.*?});', html)
                         if match:
                             try:
                                 data = json.loads(match.group(1))
-                                
+
                                 contents = data.get('contents', {}).get('twoColumnSearchResultsRenderer', {}).get('primaryContents', {}).get('sectionListRenderer', {}).get('contents', [])
-                                
+
                                 for section in contents:
                                     items = section.get('itemSectionRenderer', {}).get('contents', [])
                                     for item in items:
@@ -315,7 +244,7 @@ class YouTubeHandlerSingleton:
                                                 }
                             except json.JSONDecodeError:
                                 pass
-        
+
         except Exception as e:
             logging.error(f"❌ Web-based search error: {e}")
             return None
@@ -324,9 +253,9 @@ class YouTubeHandlerSingleton:
         """Create a searchable fallback result"""
         try:
             query_hash = hashlib.md5(f"{query}{int(time.time() // 3600)}".encode()).hexdigest()[:11]
-            
+
             artist_name = self._extract_artist_from_query(query)
-            
+
             return {
                 'id': query_hash,
                 'title': f"Search: {query}",
@@ -337,7 +266,7 @@ class YouTubeHandlerSingleton:
                 'availability': 'public',
                 'is_fallback': True
             }
-            
+
         except Exception as e:
             logging.error(f"❌ Fallback creation failed: {e}")
             return None
@@ -349,42 +278,42 @@ class YouTubeHandlerSingleton:
                 parts = query.split(' - ')
                 if len(parts) >= 2:
                     return parts[0].strip()
-            
+
             if ' by ' in query.lower():
                 parts = query.lower().split(' by ')
                 if len(parts) >= 2:
                     return parts[1].strip().title()
-            
+
             words = query.split()
             if len(words) >= 2:
                 return ' '.join(words[:2])  # First two words
             elif len(words) == 1:
                 return words[0]
-            
+
             return "Unknown Artist"
-            
+
         except Exception:
             return "Unknown Artist"
-    
+
     def _format_song_data(self, video_info: Dict) -> Dict[str, Any]:
         """Format video info with enhanced debugging and validation"""
         try:
             logging.info(f"🔍 [FORMAT DEBUG] Processing video: {video_info.get('id', 'no-id')}")
-            
+
             availability = video_info.get('availability', 'public')
             title = video_info.get('title', 'Unknown Title')
             video_id = video_info.get('id', 'unknown')
-            
+
             logging.info(f"🔍 [FORMAT DEBUG] - Title: {title}")
             logging.info(f"🔍 [FORMAT DEBUG] - ID: {video_id}")
             logging.info(f"🔍 [FORMAT DEBUG] - Availability: {availability}")
-            
+
             if not video_id or video_id == 'unknown':
                 raise ValueError(f"Invalid video ID: {video_id}")
-            
+
             if 'Private video' in title or 'Deleted video' in title:
                 raise ValueError(f"Video unavailable: {title}")
-            
+
             formatted_data = {
                 'id': video_id,
                 'title': title,
@@ -396,21 +325,21 @@ class YouTubeHandlerSingleton:
                 'availability': availability,
                 'source': 'youtube'
             }
-            
+
             logging.info(f"✅ [FORMAT DEBUG] Successfully formatted: {formatted_data['title']}")
             return formatted_data
-            
+
         except Exception as e:
             logging.error(f"❌ [FORMAT DEBUG] Error formatting video {video_info.get('id', 'unknown')}: {e}")
             raise
-    
+
     async def search_playlist(self, playlist_url: str) -> Tuple[Optional[Dict], List[Dict]]:
         """⚡ ULTRA-FAST playlist processing - NO SIZE LIMITS"""
         try:
             loop = asyncio.get_event_loop()
-            
+
             logging.info(f"🚀 [PLAYLIST] Starting processing: {playlist_url}")
-            
+
             fast_opts = {
                 'quiet': True,
                 'no_warnings': True,
@@ -424,18 +353,18 @@ class YouTubeHandlerSingleton:
                 'geo_bypass_country': None,
                 'age_limit': 99,
             }
-            
+
             cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
             if cookies_file:
                 fast_opts['cookiefile'] = cookies_file
                 logging.info(f"🍪 Using cookies for playlist: {cookies_file}")
             else:
                 logging.warning("⚠️ No cookies for playlist extraction")
-            
+
             ytdl = yt_dlp.YoutubeDL(fast_opts)  # type: ignore[arg-type]
-            
+
             logging.info(f"🚀 [PLAYLIST] Using extraction options (no size limit)")
-            
+
             start_time = time.time()
 
             try:
@@ -446,21 +375,21 @@ class YouTubeHandlerSingleton:
             except asyncio.TimeoutError:
                 logging.warning(f"⏰ [PLAYLIST] Timeout after 30s, trying fallback")
                 return await self._fallback_playlist_extraction(playlist_url)
-            
+
             if not data:
                 logging.error(f"❌ [PLAYLIST] No data returned")
                 return None, []
-            
+
             playlist_info = {
                 'title': data.get('title', 'Unknown Playlist'),
                 'uploader': data.get('uploader', 'Unknown'),
                 'total_songs': len(data.get('entries', [])),
                 'source': 'youtube'
             }
-            
+
             songs = []
             entries = data.get('entries', [])
-            
+
             for entry in entries:
                 if entry and entry.get('id'):
                     song_data = {
@@ -472,14 +401,14 @@ class YouTubeHandlerSingleton:
                         'source': 'youtube'
                     }
                     songs.append(song_data)
-            
+
             playlist_info['valid_songs'] = len(songs)
             extraction_time = time.time() - start_time
-            
+
             logging.info(f"🚀 [PLAYLIST] Completed in {extraction_time:.2f}s: {len(songs)} songs")
-            
+
             return playlist_info, songs
-            
+
         except Exception as e:
             logging.error(f"❌ [PLAYLIST] Error: {e}")
             logging.exception('Exception traceback')
@@ -489,7 +418,7 @@ class YouTubeHandlerSingleton:
         """Fallback method - extract just the first few songs"""
         try:
             logging.info(f"🔄 [PLAYLIST FALLBACK] Attempting limited extraction")
-            
+
             playlist_info = {
                 'title': 'YouTube Playlist (Limited)',
                 'uploader': 'Unknown',
@@ -497,16 +426,16 @@ class YouTubeHandlerSingleton:
                 'valid_songs': 0,
                 'source': 'youtube_fallback'
             }
-            
+
             return playlist_info, []
-            
+
         except Exception as e:
             logging.error(f"❌ [PLAYLIST FALLBACK] Error: {e}")
             return None, []
-    
+
     def cleanup(self):
         self._search_pool.clear()
-        self._download_pool.clear()
+        
 
 try:
     import discord as _discord_mod
@@ -523,7 +452,7 @@ else:
     _BaseVolume = _PCMVolumeTransformer  # type: ignore[assignment]
 
 class YTDLSource(_BaseVolume):
-    """Optimized Discord audio source with caching"""
+    """Optimized Discord audio source for streaming"""
     def __init__(self, source, *, data, volume=0.5):
         if _PCMVolumeTransformer is not None:
             try:
@@ -556,62 +485,134 @@ class YTDLSource(_BaseVolume):
                 logging.info(f"✅ [YTDLSource.cleanup] Called super().cleanup() for: {self.title}")
             except Exception as e:
                 logging.error(f"❌ [YTDLSource.cleanup] Error in super().cleanup() for {self.title}: {e}")
+        # Defensive: attempt to forcibly terminate any underlying ffmpeg
+        # subprocess that may still be running after the normal cleanup.
+        try:
+            proc = None
+            # common attribute names used by wrappers to store the Popen
+            for attr in ('process', 'proc', 'popen'):
+                proc = getattr(self.source, attr, None)
+                if proc:
+                    break
+
+            # Some wrappers keep the subprocess on a nested attribute
+            if proc is None:
+                maybe = getattr(self.source, 'player', None)
+                if maybe is not None:
+                    proc = getattr(maybe, 'process', None) or getattr(maybe, 'proc', None)
+
+            if proc:
+                pid = getattr(proc, 'pid', None)
+                logging.info(f"🛑 Forcing termination of ffmpeg subprocess (pid={pid}) for: {self.title}")
+                try:
+                    if hasattr(proc, 'terminate'):
+                        proc.terminate()
+                except Exception:
+                    pass
+                # wait briefly for process to exit
+                start = time.time()
+                while time.time() - start < 1.0:
+                    try:
+                        poll = getattr(proc, 'poll', None)
+                        if poll and poll() is not None:
+                            break
+                    except Exception:
+                        break
+                    time.sleep(0.05)
+                # if still alive, try kill
+                try:
+                    poll = getattr(proc, 'poll', None)
+                    if poll and poll() is None and hasattr(proc, 'kill'):
+                        proc.kill()
+                except Exception:
+                    pass
+        except Exception:
+            logging.exception("Error forcing ffmpeg subprocess termination")
         self._cleaned_up = True
 
     @classmethod
-    async def from_url(cls, url: str, *, loop=None, volume_percent=100, start_time=0, prefer_file: bool = False, download_if_missing: bool = False):
+    async def from_url(cls, url: str, *, loop=None, volume_percent=100, start_time=0):
         try:
             loop = loop or asyncio.get_event_loop()
             handler = youtube_handler
-            ytdl = handler._get_download_instance(use_cookies=True)
+            
+            # Get a ytdl instance without a specific format to list available formats
+            ytdl_list_formats = handler._get_stream_instance(use_cookies=True)
+            # Override format to just get info
+            ytdl_list_formats.params['format'] = None 
+
             data = await loop.run_in_executor(
                 None,
-                lambda: ytdl.extract_info(url, download=False)
+                lambda: ytdl_list_formats.extract_info(url, download=False)
             )
+
             if not data:
                 raise Exception(f"Could not extract info from: {url}")
             if 'entries' in data and data['entries']:
                 data = data['entries'][0]
+
+            # --- Start of new format selection logic ---
             audio_url = None
-            if 'url' in data:
-                audio_url = data['url']
-            elif 'formats' in data and data['formats']:
-                audio_formats = [f for f in data['formats'] if f and f.get('acodec') != 'none']
-                if audio_formats:
-                    audio_url = audio_formats[0].get('url')
+            chosen_format = None
+
+            if 'formats' in data and data['formats']:
+                candidates = []
+                for f in data['formats']:
+                    # Basic filtering for audio-only streams with a URL
+                    if not f or f.get('acodec') == 'none' or not f.get('url'):
+                        continue
+
+                    proto = (f.get('protocol') or '').lower()
+                    ext = (f.get('ext') or '').lower()
+                    
+                    # Deprioritize segmented or problematic formats
+                    deprioritize = proto in ('dash', 'f4m', 'rtmp') or ext in ('m3u8', 'm3u8_native') or 'hls' in proto
+                    
+                    # Prioritize standard HTTP progressive streams
+                    preferred_proto = 0 if proto in ('https', 'http', 'https_native') else 1
+                    
+                    # Get bitrate, fall back to 0 if not available
+                    tbr = f.get('tbr') or f.get('abr') or 0
+                    
+                    candidates.append((deprioritize, preferred_proto, -int(tbr), f))
+
+                # Sort candidates: non-deprioritized first, then by protocol, then by bitrate (highest first)
+                if candidates:
+                    candidates.sort(key=lambda t: (t[0], t[1], t[2]))
+                    chosen_format = candidates[0][-1]
+                    audio_url = chosen_format.get('url')
+            
+            # Fallback if the above logic fails
+            if not audio_url and 'url' in data:
+                 audio_url = data['url']
+                 chosen_format = {'note': 'direct_fallback', 'url': audio_url}
+
+            # --- End of new format selection logic ---
+
+            logging.info(f"🔊 [YTDLSource.from_url] Chosen audio_url present: {bool(audio_url)} for {url}")
+            if chosen_format:
+                try:
+                    logging.info(f"🔊 [YTDLSource.from_url] chosen format protocol={chosen_format.get('protocol')} ext={chosen_format.get('ext')} tbr={chosen_format.get('tbr')}")
+                except Exception:
+                    pass
             if not _FFmpegPCMAudio:
                 raise Exception("FFmpegPCMAudio unavailable")
 
-            video_id = data.get('id')
-            local_path: Optional[Path] = None
-            if video_id:
-                local_path = handler.find_cached_file(video_id)
-
-            if prefer_file and local_path and local_path.exists():
-                before_options = f"-ss {start_time}" if start_time > 0 else None
-                options = '-vn -bufsize 1024k'
-                source = _FFmpegPCMAudio(str(local_path), before_options=before_options, options=options)  # type: ignore[misc]
-                volume = volume_percent / 100.0
-                return cls(source, data=data, volume=volume)
-
             if not audio_url:
                 raise Exception("No audio URL found for streaming")
-            before_options = f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {start_time}' if start_time > 0 else '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
-            options = '-vn -bufsize 1024k'
+            # Use conservative ffmpeg options. Avoid aggressive seeking unless
+            # start_time > 0. Add -nostdin and some buffering flags to reduce
+            # unexpected seeking behavior on segmented streams.
+            before_options = '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+            if start_time and start_time > 0:
+                before_options += f' -ss {start_time}'
+            options = '-vn -bufsize 1024k -nostdin -hide_banner -loglevel warning'
+            logging.info(f"🔊 [YTDLSource.from_url] ffmpeg before_options={before_options} options={options} audio_url_preview={str(audio_url)[:220]}")
             source = _FFmpegPCMAudio(audio_url, before_options=before_options, options=options)  # type: ignore[misc]
             volume = volume_percent / 100.0
             instance = cls(source, data=data, volume=volume)
 
-            if download_if_missing and (not local_path or not local_path.exists()) and video_id:
-                async def _bg_download():
-                    try:
-                        await handler.download_audio(url, use_cookies=True)
-                    except Exception:
-                        pass
-                try:
-                    asyncio.create_task(_bg_download())
-                except Exception:
-                    pass
+            
 
             return instance
         except Exception as e:

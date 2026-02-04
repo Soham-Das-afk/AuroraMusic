@@ -8,7 +8,7 @@ from config.settings import Config
 
 class ControllerManager:
     """Manages music controller embeds"""
-    
+
     def __init__(self, music_cog):
         self.music_cog = music_cog
         self.controller_data_file = Path(__file__).parent.parent.parent / "data" / "controller_data.json"
@@ -77,7 +77,7 @@ class ControllerManager:
         except Exception:
             logging.exception("Unexpected error resolving banner URL")
             return None
-    
+
     def load_controller_data(self):
         """Load controller data from JSON"""
         try:
@@ -88,12 +88,12 @@ class ControllerManager:
         except Exception as e:
             logging.error("Error loading controller data: %s", e)
             return {}
-    
+
     async def update_controller_embed(self, guild_id, song_data=None, status="waiting"):
         """Update controller with debouncing and banner support"""
         if guild_id in self._update_tasks:
             self._update_tasks[guild_id].cancel()
-        
+
         bot_banner_url = await self._get_banner_url()
 
         self._update_tasks[guild_id] = asyncio.create_task(
@@ -158,7 +158,7 @@ class ControllerManager:
             return f"{minutes}:{seconds:02d}"
         except Exception:
             return "Unknown"
-    
+
     def create_controller_embed(self, song_data, status, queue, bot_banner_url=None):
         """Create controller embed with cleaned design (banner, thumbnail, organized fields)"""
         try:
@@ -176,7 +176,7 @@ Currently streaming high-quality audio
                     """,
                     color=0x00ff00
                 )
-                
+
                 uploader = song_data.get('uploader', 'Unknown Artist')
                 if uploader in ['YouTube Search', 'Fallback Search', 'YouTube Alternative']:
                     title = song_data.get('title', '')
@@ -187,16 +187,16 @@ Currently streaming high-quality audio
                     else:
                         uploader = "Unknown Artist"
                 embed.add_field(name="👤 Artist", value=uploader, inline=True)
-                
+
                 if song_data.get('duration'):
                     duration_str = self.format_duration(song_data['duration'])
                     embed.add_field(name="⏱️ Duration", value=duration_str, inline=True)
-                
+
                 embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
-                
+
                 total_items = queue.total_items()
                 embed.add_field(name="📋 Queue Size", value=f"{total_items} items", inline=True)
-                
+
                 if queue.processed_queue:
                     next_song = list(queue.processed_queue)[0]
                     next_title = next_song.get('title', 'Unknown')
@@ -207,7 +207,7 @@ Currently streaming high-quality audio
                     embed.add_field(name="⏭️ Processing", value="Loading next songs...", inline=True)
                 else:
                     embed.add_field(name="⏭️ Up Next", value="Nothing queued", inline=True)
-                
+
                 status_text = "🟢 Playing"
                 if queue.loop_mode:
                     status_text += " • Loop On"
@@ -216,7 +216,7 @@ Currently streaming high-quality audio
                 if song_data.get('spotify_track'):
                     status_text += " • 🎵 Spotify"
                 embed.add_field(name="📊 Status", value=status_text, inline=False)
-                
+
                 try:
                     if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
                         embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
@@ -224,7 +224,7 @@ Currently streaming high-quality audio
                     pass
 
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
-                
+
             elif song_data and status == "paused":
                 embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏸️ Paused",
@@ -240,7 +240,7 @@ Playback is currently paused
                 embed.add_field(name="📋 Queue", value=f"{total_items} items", inline=True)
                 loop_status = "Loop On" if queue.loop_mode else "Loop Off"
                 embed.add_field(name="📊 Status", value=f"⏸️ Paused • {loop_status}", inline=True)
-                
+
                 try:
                     if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
                         embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
@@ -248,7 +248,7 @@ Playback is currently paused
                     pass
 
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
-                
+
             elif status == "loading":
                 embed = discord.Embed(  # type: ignore[attr-defined]
                     title="⏳ Loading...",
@@ -262,7 +262,7 @@ Please wait while we prepare your music
                 embed.add_field(name="📊 Status", value="⏳ Loading", inline=True)
                 embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
                 embed.add_field(name="📋 Queue", value=f"{queue.total_items()} items", inline=True)
-                
+
                 try:
                     if getattr(Config, 'SHOW_CONTROLLER_THUMBNAIL', False) and getattr(Config, 'CONTROLLER_THUMBNAIL_URL', ''):
                         embed.set_thumbnail(url=Config.CONTROLLER_THUMBNAIL_URL)
@@ -270,7 +270,7 @@ Please wait while we prepare your music
                     pass
 
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
-                
+
             else:
                 embed = discord.Embed(  # type: ignore[attr-defined]
                     title="🎵 AuroraMusic Controller",
@@ -292,12 +292,12 @@ Send a song name, YouTube URL, Spotify link, or playlist to start!
                         embed.add_field(name="⏭️ Up Next", value=next_title, inline=True)
                 else:
                     embed.add_field(name="📋 Queue", value="No items in queue", inline=True)
-                
+
                 status_text = "🔴 Stopped"
                 embed.add_field(name="📊 Status", value=status_text, inline=False)
-                
+
                 embed.set_footer(text="Developed by Soham-Das-afk on GitHub")
-            
+
             return embed
         except Exception as e:
             logging.exception("Error creating controller embed: %s", e)

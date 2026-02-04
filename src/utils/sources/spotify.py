@@ -17,23 +17,23 @@ from config.settings import Config
 
 class SpotifyHandler(AudioSource):
     """Enhanced Spotify handler with streaming processing like YouTube"""
-    
+
     def __init__(self):
         super().__init__()
         self.youtube = youtube_handler
         self.spotify = None
         self.session: Optional[aiohttp.ClientSession] = None
-        
+
         self._connector = None
-        
+
         self._initialize_spotify()
-    
+
     def _initialize_spotify(self):
         """Initialize Spotify client with error handling"""
         if not Config.SPOTIFY_CLIENT_ID or not Config.SPOTIFY_CLIENT_SECRET:
             logging.warning("Spotify credentials not configured")
             return
-        
+
         try:
             credentials = SpotifyClientCredentials(
                 client_id=Config.SPOTIFY_CLIENT_ID,
@@ -44,15 +44,15 @@ class SpotifyHandler(AudioSource):
         except Exception as e:
             logging.error("Spotify initialization failed: %s", e)
             self.spotify = None
-    
+
     def is_url_supported(self, url: str) -> bool:
         """Check if URL is from Spotify"""
         return bool(re.search(r'(open\.spotify\.com|spotify\.com|spotify:)', url, re.IGNORECASE))
-    
+
     def is_playlist_url(self, url: str) -> bool:
         """Check if Spotify URL is a playlist or album"""
         return self.is_url_supported(url) and ('playlist' in url or 'album' in url)
-    
+
     def extract_spotify_id(self, url: str) -> Tuple[Optional[str], Optional[str]]:
         """Extract Spotify ID and type from URL"""
         try:
@@ -70,9 +70,9 @@ class SpotifyHandler(AudioSource):
                     return content_type, spotify_id
         except Exception as e:
             logging.error("Error extracting Spotify ID: %s", e)
-        
+
         return None, None
-    
+
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create optimized aiohttp session"""
         if self.session is None or self.session.closed:
@@ -332,7 +332,7 @@ class SpotifyHandler(AudioSource):
             logging.info("[SPOTIFY PLAYLIST] Metadata extracted in %.2fs", extraction_time)
 
             songs = []
-            
+
             for i, track in enumerate(spotify_tracks, 1):
                 song_data = {
                     'id': f"spotify_{track['id']}",
@@ -363,14 +363,14 @@ class SpotifyHandler(AudioSource):
         except Exception as e:
             logging.exception("[SPOTIFY PLAYLIST] Error: %s", e)
             return None, []
-    
+
     async def cleanup(self):
         """Enhanced cleanup with connection management"""
         if self.session and not self.session.closed:
             await self.session.close()
         if self._connector and not self._connector.closed:
             await self._connector.close()
-    
+
     def validate_credentials(self) -> bool:
         """Validate Spotify credentials"""
         return bool(Config.SPOTIFY_CLIENT_ID and Config.SPOTIFY_CLIENT_SECRET)

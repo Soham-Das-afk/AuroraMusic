@@ -1,7 +1,11 @@
 # Secrets and environment
 .env
-.env.*
 bot.log
+
+# Explicitly ignore local test files (keeps testing artifacts out of commits)
+.env
+src/cookies/youtube.txt
+src/data/controller_data.json
 
 # Python
 __pycache__/
@@ -22,17 +26,14 @@ Thumbs.db
 # Ignore contents of these folders, but keep placeholders and docs
 src/cookies/*
 src/data/*
-src/downloads/*
 cookies/*
 data/*
-downloads/*
 !cookies/README.md
 !cookies/youtube.txt.example
-!data/.gitkeep
-!downloads/.gitkeep
+# Keep example cookie files in source so they can be committed for new users
+!src/cookies/*.example*
 !src/cookies/.gitkeep
-!src/data/.gitkeep
-!src/downloads/.gitkeep
+!data/.gitkeep
 *.sqlite
 *.db
 
@@ -40,3 +41,9 @@ downloads/*
 dist/
 build/
 *.egg-info/.env
+
+# Ignore helper scripts created during local maintenance
+scripts/
+
+# Local virtualenv
+.venv/

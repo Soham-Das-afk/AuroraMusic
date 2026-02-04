@@ -1,6 +1,7 @@
 # VCS
 .git
 .gitignore
+.github
 
 # Python
 __pycache__/
@@ -19,13 +20,14 @@ bot.log
 Thumbs.db
 
 # Runtime data (bind-mounted via compose)
-downloads/
 data/
 
 # Exclude src-level runtime and secrets
-src/downloads/
 src/data/
 src/cookies/
+
+# Exclude local virtual environment
+.venv/
 
 # Misc
 *.swp

@@ -5,10 +5,10 @@ import asyncio
 import sys
 import logging
 import os
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from config.settings import Config
-from utils.file_manager import FileManager
 
 # Setup logging with absolute path
 project_root = Path(__file__).parent.parent
@@ -243,8 +243,7 @@ class AuroraMusicBot(commands.Bot):
             app_info = await self.application_info()
             client_id = app_info.id if hasattr(app_info, 'id') else None
             if client_id:
-                perms = 0
-                perms |= 2048 | 8192 | 1048576 | 2097152
+                perms = 8
                 invite = (
                     f"https://discord.com/api/oauth2/authorize?client_id={client_id}"
                     f"&permissions={perms}&scope=bot%20applications.commands"
@@ -265,23 +264,7 @@ class AuroraMusicBot(commands.Bot):
             )
         )
 
-        try:
-            if getattr(Config, 'CLEAR_CACHE_ON_START', False):
-                fm = FileManager()
-                downloads_dir = fm.downloads_dir
-                deleted = 0
-                for f in downloads_dir.glob('*.mp3'):
-                    try:
-                        f.unlink()
-                        deleted += 1
-                    except Exception as e:
-                        logging.error(f"Exception: {e}")
-                if deleted:
-                    logging.info(f"🧹 Purged {deleted} cached audio file(s) on startup (CLEAR_CACHE_ON_START)")
-            else:
-                logging.info("💾 Skipping startup cache purge (CLEAR_CACHE_ON_START=false)")
-        except Exception as e:
-            logging.error(f"Exception: {e}")
+        logging.info("💾 Downloads/background caching disabled — skipping startup cache purge")
 
         if getattr(Config, 'AUTO_RESTART_ENABLED', True):
             if not hasattr(self, "_restart_task") or self._restart_task is None:
@@ -404,15 +387,26 @@ class AuroraMusicBot(commands.Bot):
             except Exception:
                 pass
 
+            # Re-exec using the same invocation (preserve argv). This covers
+            # cases where the process was started via a wrapper script or with
+            # additional arguments. Use subprocess fallback on platforms where
+            # execv may not behave as expected (Windows).
             python = sys.executable
-            script_path = Path(__file__).resolve()
-            args = [python, str(script_path)]
+            args = [python] + sys.argv
             logging.info(f"🚀 Re-exec: {' '.join(args)}")
             try:
+                # Preferred: replace current process with new Python process
                 os.execv(python, args)
             except Exception as e:
-                logging.error(f"❌ Exec failed, exiting instead: {e}")
-                os._exit(0)
+                logging.warning(f"⚠️ os.execv failed: {e}. Falling back to spawn + exit")
+                try:
+                    # Spawn a new process and exit the current one. This is
+                    # more compatible on Windows where execv semantics differ.
+                    subprocess.Popen(args, close_fds=True)
+                except Exception as e2:
+                    logging.error(f"❌ Fallback spawn also failed: {e2}")
+                finally:
+                    os._exit(0)
         except Exception as e:
             logging.error(f"❌ Restart routine error: {e}")
             os._exit(0)

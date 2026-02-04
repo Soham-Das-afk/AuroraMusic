@@ -1,28 +1,25 @@
 version: '3.8'
 
 services:
-  auroramusic:
-    build: .
-    working_dir: /app
-    volumes:
-      - ./data:/app/src/data
-      - ./downloads:/app/src/downloads
-      - ./cookies:/app/src/cookies:ro
-      - ./.env:/app/.env
-    environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-      - ALLOWED_GUILD_IDS=${ALLOWED_GUILD_IDS}
-      - YOUTUBE_COOKIES=${YOUTUBE_COOKIES}
-      # Optional command-sync / rate-limit protection settings
-      - ENABLE_GLOBAL_COMMAND_SYNC=${ENABLE_GLOBAL_COMMAND_SYNC}
-      - COMMAND_SYNC_RETRIES=${COMMAND_SYNC_RETRIES}
-      - COMMAND_SYNC_BACKOFF_BASE=${COMMAND_SYNC_BACKOFF_BASE}
-      - GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED=${GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED}
-      - GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC=${GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC}
-      - GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC=${GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC}
-      - GLOBAL_COMMAND_SYNC_RETRY_INTERVAL_SECONDS=${GLOBAL_COMMAND_SYNC_RETRY_INTERVAL_SECONDS}
-      - GLOBAL_COMMAND_SYNC_MAX_ATTEMPTS_IN_WINDOW=${GLOBAL_COMMAND_SYNC_MAX_ATTEMPTS_IN_WINDOW}
+  redis:
+    image: redis:7.2-alpine
+    container_name: auroramusic_redis
     restart: unless-stopped
-    command: python src/bot.py
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    container_name: auroramusic_bot
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./src/data:/app/src/data
+      - ./src/cookies:/app/src/cookies:ro

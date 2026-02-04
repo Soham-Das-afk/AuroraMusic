@@ -60,7 +60,6 @@ docker run --name auroramusic ^
    --env-file .env ^
    -v "$PWD/cookies:/app/src/cookies:ro" ^
    -v "$PWD/data:/app/src/data" ^
-   -v "$PWD/downloads:/app/src/downloads" ^
    -p 8080:8080 ^
    -d sohamdas103/auroramusic:latest
 ```
@@ -73,7 +72,6 @@ docker run --name auroramusic \
    --env-file .env \
    -v "$(pwd)/cookies:/app/src/cookies:ro" \
    -v "$(pwd)/data:/app/src/data" \
-   -v "$(pwd)/downloads:/app/src/downloads" \
    -p 8080:8080 \
    -d sohamdas103/auroramusic:latest
 ```
@@ -91,7 +89,7 @@ docker run --name auroramusic \
 - **Voice Integration**: Joins voice channels and streams high-quality audio.
 - **Error Handling**: Provides user-friendly error messages and robust exception handling.
 - **Persistent State**: Remembers playback history and controller channel information per guild.
-- **Pre-caching**: Downloads the next track in the queue for smooth playback.
+- **Streaming-first playback**: The bot streams audio directly from sources. On-disk pre-caching and background downloads have been removed.
 
 ## Installation (local)
 
@@ -137,12 +135,12 @@ docker run --name auroramusic \
 Permissions note:
 - The bot should have “Manage Messages” in the controller channel for auto-cleanup of helper messages.
 
-### Downloads and Cleanup
+### Streaming & file management
 
-- Downloads folder: `src/downloads` (configurable via `Config.DOWNLOADS_DIR`)
-- Files older than 1 day are automatically deleted; we also keep the total under 100 files by removing the oldest if needed.
-- Cache persistence across restarts: by default the cache is preserved. Set `CLEAR_CACHE_ON_START=true` if you want to start fresh each run.
-- Cleanup runs hourly in the background. You can adjust these settings in `utils/file_manager.py` if desired.
+- This build uses streaming-first playback: audio is streamed directly from sources (YouTube/Spotify) and the bot does not write audio files to disk.
+- If you previously mounted a `downloads` folder in Docker or on the host, you may remove that volume — it is not used by the current build.
+   The `utils/file_manager.py` module remains in the repo as a harmless placeholder to avoid import errors in integrations.
+
 
 ## Step-by-step setup
 
@@ -249,14 +247,14 @@ Optional:
  - `AUTO_RESTART_ENABLED` — enable daily auto-restart (true/false, default true)
  - `AUTO_RESTART_TIME` — time for restart in HH:MM (default 06:00)
  - `AUTO_RESTART_TZ_OFFSET_MINUTES` — timezone offset in minutes (IST=330)
- - `CLEAR_CACHE_ON_START` — when true, delete all cached audio files on startup; when false (default), keep the cache across restarts
+ - `CLEAR_CACHE_ON_START` — (removed) on-disk cache and background downloads are disabled; this option is deprecated in this build.
  - `ENABLE_GLOBAL_COMMAND_SYNC` — allow global slash-command sync (true/false; default: false). Use with care to avoid rate limits.
  - `COMMAND_SYNC_RETRIES` — number of retries for command sync attempts (default: 3)
  - `COMMAND_SYNC_BACKOFF_BASE` — exponential backoff base for command sync retries (default: 1.5; delay = base ** attempt)
  - `GLOBAL_COMMAND_SYNC_OFFPEAK_ENABLED` — if true, global command syncing will be deferred to an off-peak UTC window (default: false)
  - `GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC` — start hour (UTC) for off-peak window (0–23; default: 2)
  - `GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC` — end hour (UTC) for off-peak window (0–23; default: 5)
- 
+
 ### Hosting your banner image (recommended options)
 
 If your Discord App banner isn’t set or you prefer a custom GIF, set `BOT_BANNER_URL` to a direct image URL. Reliable, no-login choices:
@@ -290,13 +288,12 @@ Notes:
 - Personal cookies and runtime data are not baked into the image. The compose file mounts:
    - `./cookies -> /app/src/cookies:ro`
    - `./data -> /app/src/data`
-   - `./downloads -> /app/src/downloads`
 - To stop the container:
    ```
    docker compose down
    ```
 - Multi-arch images: Starting with v3.2.35+, images are published for `linux/amd64` and `linux/arm64` (Apple Silicon, Graviton, etc.). Docker will automatically pull the correct architecture manifest.
- 
+
 ### Windows (Docker Desktop)
 
 1) Install Docker Desktop and ensure WSL 2 backend is enabled.
@@ -379,7 +376,7 @@ I maintain this project when it’s needed or when I get time. If you run into i
 
 - Discord: @sick._.duck.103 (Discord ID: 616499661951467530)
 
-  
+
 
 ## License
 

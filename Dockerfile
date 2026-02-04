@@ -1,15 +1,14 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set the working directory
 WORKDIR /app
 
 # System dependencies for audio (ffmpeg) and general
-RUN apt-get update \
-	 && apt-get install -y --no-install-recommends \
-		 ffmpeg \
-		 libopus0 \
-		 libsodium23 \
-	 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libopus0 \
+    libsodium-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
 COPY requirements.txt ./

@@ -12,6 +12,6 @@ def is_user_in_voice_channel(user):
 
 def can_use_music_commands(user, guild_id, allowed_guilds, required_role):
     """Check if the user can use music commands based on permissions."""
-    return (is_guild_allowed(guild_id, allowed_guilds) and 
-            is_user_in_voice_channel(user) and 
+    return (is_guild_allowed(guild_id, allowed_guilds) and
+            is_user_in_voice_channel(user) and
             has_permission(user, required_role))
