@@ -1,13 +1,9 @@
 # AuroraMusic Discord Music Bot (v4.2.4)
 
-<!-- If this repo is public, you can use dynamic GitHub badges below:
+<!-- If this repo is public, you can use dynamic GitHub badges below: -->
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=master)
--->
-[![release](https://img.shields.io/badge/release-v3.2.37-blue)](https://github.com/Soham-Das-afk/AuroraMusic/releases/latest)
-[![build](https://img.shields.io/badge/build-GitHub%20Actions-blue)](https://github.com/Soham-Das-afk/AuroraMusic/actions)
 
-<!-- Note: Repo is currently private (dynamic GitHub badges require public visibility). Once public, you can uncomment the dynamic badges above -->
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
 ![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
 
