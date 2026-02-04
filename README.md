@@ -1,4 +1,4 @@
-# AuroraMusic Discord Music Bot (v3.2.37)
+# AuroraMusic Discord Music Bot (v4.2.3)
 
 <!-- If this repo is public, you can use dynamic GitHub badges below:
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
