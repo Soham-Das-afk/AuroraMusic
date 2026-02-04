@@ -91,7 +91,7 @@ jobs:
       - name: Inspect multi-arch manifest
         if: ${{ secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
         run: |
-          echo "Inspecting manifest for version tag" 
+          echo "Inspecting manifest for version tag"
           docker buildx imagetools inspect sohamdas103/auroramusic:${{ steps.vars.outputs.version }}
           echo "Inspecting manifest for latest tag"
           docker buildx imagetools inspect sohamdas103/auroramusic:latest
