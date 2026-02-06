@@ -101,40 +101,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
             except Exception as e2:
                 logging.error(f"Failed to send error message: {e2}")
 
-    @discord.ui.button(emoji='⏪', label='Rewind 10s', style=discord.ButtonStyle.primary, custom_id='music_rewind', row=1)  # type: ignore[attr-defined]
-    async def rewind(self, interaction: Any, button: Any):
-        try:
-            music_cog = interaction.client.get_cog('MusicCog')
-            if music_cog and hasattr(music_cog, 'handle_rewind'):
-                await music_cog.handle_rewind(interaction)
-            else:
-                await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
-        except Exception as e:
-            logging.error(f"Exception in rewind button: {e}")
-
-    @discord.ui.button(emoji='⏩', label='Forward 10s', style=discord.ButtonStyle.primary, custom_id='music_forward', row=1)  # type: ignore[attr-defined]
-    async def forward(self, interaction: Any, button: Any):
-        try:
-            music_cog = interaction.client.get_cog('MusicCog')
-            if music_cog and hasattr(music_cog, 'handle_forward'):
-                await music_cog.handle_forward(interaction)
-            else:
-                await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
-        except Exception as e:
-            logging.error(f"Exception in forward button: {e}")
-
-    @discord.ui.button(emoji='🔊', label='Volume', style=discord.ButtonStyle.secondary, custom_id='music_volume', row=1)  # type: ignore[attr-defined]
-    async def volume(self, interaction: Any, button: Any):
-        try:
-            music_cog = interaction.client.get_cog('MusicCog')
-            if music_cog and hasattr(music_cog, 'handle_volume'):
-                await music_cog.handle_volume(interaction)
-            else:
-                await interaction.response.send_message("❌ Music system not available!", ephemeral=True)
-        except Exception as e:
-            logging.error(f"Exception in volume button: {e}")
-
-    @discord.ui.button(emoji='🔁', label='Loop', style=discord.ButtonStyle.secondary, custom_id='music_loop', row=2)  # type: ignore[attr-defined]
+    @discord.ui.button(emoji='🔁', label='Loop', style=discord.ButtonStyle.secondary, custom_id='music_loop', row=1)  # type: ignore[attr-defined]
     async def loop_mode(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
@@ -145,7 +112,7 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
         except Exception as e:
             logging.error(f"Exception in loop button: {e}")
 
-    @discord.ui.button(emoji='🔀', label='Shuffle', style=discord.ButtonStyle.secondary, custom_id='music_shuffle', row=2)  # type: ignore[attr-defined]
+    @discord.ui.button(emoji='🔀', label='Shuffle', style=discord.ButtonStyle.secondary, custom_id='music_shuffle', row=1)  # type: ignore[attr-defined]
     async def shuffle(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')
@@ -156,9 +123,10 @@ class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
         except Exception as e:
             logging.error(f"Exception in shuffle button: {e}")
 
-    @discord.ui.button(emoji='🔄', label='AutoPlay', style=discord.ButtonStyle.secondary, custom_id='music_autoplay', row=2)  # type: ignore[attr-defined]
+    @discord.ui.button(emoji='🔄', label='AutoPlay', style=discord.ButtonStyle.secondary, custom_id='music_autoplay', row=1)  # type: ignore[attr-defined]
     async def autoplay(self, interaction: Any, button: Any):
         await interaction.response.send_message("🔄 AutoPlay feature coming soon!", ephemeral=True)
+
 
     def create_controller_embed(self, song_data, status, queue):
         """Create controller embed with cleaned design (banner, thumbnail, organized fields)"""
@@ -183,10 +151,7 @@ Currently streaming high-quality audio
                     else:
                         uploader = "Unknown Artist"
                 embed.add_field(name="👤 Artist", value=uploader, inline=True)
-                if song_data.get('duration'):
-                    duration_str = self.format_duration(song_data['duration'])
-                    embed.add_field(name="⏱️ Duration", value=duration_str, inline=True)
-                embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
+                embed.add_field(name="⏱️ Duration", value=duration_str, inline=True)
                 total_items = queue.total_items()
                 embed.add_field(name="📋 Queue Size", value=f"{total_items} items", inline=True)
                 if queue.processed_queue:

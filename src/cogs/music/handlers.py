@@ -5,48 +5,6 @@ import logging
 from typing import Optional
 from utils.sources.youtube import YTDLSource
 
-class VolumeModal(discord.ui.Modal, title='Set Volume'):
-    """Modal for volume input with validation"""
-
-    def __init__(self, music_cog):
-        super().__init__()
-        self.music_cog = music_cog
-
-    volume = discord.ui.TextInput(
-        label='Volume (10-200%)',
-        placeholder='Enter volume percentage...',
-        default='100',
-        max_length=3,
-        min_length=2
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            volume_value = int(self.volume.value)
-            if not 10 <= volume_value <= 200:
-                return
-
-            if not interaction.guild:
-                return
-
-            queue = self.music_cog.get_queue(interaction.guild.id)
-            old_volume = queue.volume
-            queue.set_volume(volume_value)
-
-            await self.music_cog.update_controller_embed(
-                interaction.guild.id, queue.current,
-                "playing" if getattr(interaction.guild, 'voice_client', None) and getattr(interaction.guild.voice_client, 'is_playing', lambda: False)() else "waiting"
-            )
-
-            return
-
-        except ValueError:
-            return
-        except Exception as e:
-            logging.error(f"Error in volume modal: {e}")
-            return
-
-
 class ButtonHandlers:
     """Enhanced button handlers with rate limiting and error recovery"""
 
@@ -216,16 +174,16 @@ class ButtonHandlers:
             self.music_cog.playback_manager._manual_operations.add(guild_id)
 
             async with self.queue_manager.get_lock(guild_id):
-                if queue.current:
-                    queue.processed_queue.appendleft(queue.current)
-
                 previous_song = queue.get_previous()
 
                 if not previous_song:
-                    if queue.processed_queue and queue.processed_queue[0] == queue.current:
-                        queue.current = queue.processed_queue.popleft()
                     self.music_cog.playback_manager._manual_operations.discard(guild_id)
                     return
+
+                if queue.current:
+                    queue.processed_queue.appendleft(queue.current)
+                
+                queue.current = previous_song
 
                 voice_client.stop()
                 await asyncio.sleep(0.5)
@@ -290,66 +248,6 @@ class ButtonHandlers:
         except Exception as e:
             self._record_error("loop")
             logging.error(f"Loop error: {e}")
-            return
-
-    async def handle_rewind(self, interaction):
-        """Enhanced rewind with position tracking"""
-        try:
-            await interaction.response.defer(ephemeral=True)
-            voice_client = interaction.guild.voice_client
-
-            if not voice_client or not voice_client.is_connected():
-                return
-
-            queue = self.queue_manager.get_queue(interaction.guild.id)
-            if not queue.current:
-                return
-
-            current_pos = self.music_cog.playback_manager.get_current_position(interaction.guild.id)
-            new_position = max(0, current_pos - 10)
-
-            success = await self.music_cog.playback_manager.seek_to_position(
-                interaction.guild.id, voice_client, new_position
-            )
-
-            await asyncio.sleep(0.1)
-            return
-
-        except Exception as e:
-            self._record_error("rewind")
-            logging.error(f"Rewind error: {e}")
-            return
-
-    async def handle_forward(self, interaction):
-        """Enhanced forward with duration checking"""
-        try:
-            await interaction.response.defer(ephemeral=True)
-            voice_client = interaction.guild.voice_client
-
-            if not voice_client or not voice_client.is_connected():
-                return
-
-            queue = self.queue_manager.get_queue(interaction.guild.id)
-            if not queue.current:
-                return
-
-            current_pos = self.music_cog.playback_manager.get_current_position(interaction.guild.id)
-            new_position = current_pos + 10
-
-            duration = queue.current.get('duration')
-            if duration and new_position >= duration - 5:  # 5 second buffer
-                voice_client.stop()
-                return
-            else:
-                success = await self.music_cog.playback_manager.seek_to_position(
-                    interaction.guild.id, voice_client, new_position
-                )
-                await asyncio.sleep(0.1)
-                return
-
-        except Exception as e:
-            self._record_error("forward")
-            logging.error(f"Forward error: {e}")
             return
 
     async def _auto_delete_message(self, message, delay=3):

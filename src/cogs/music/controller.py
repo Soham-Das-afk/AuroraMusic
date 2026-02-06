@@ -192,8 +192,6 @@ Currently streaming high-quality audio
                     duration_str = self.format_duration(song_data['duration'])
                     embed.add_field(name="⏱️ Duration", value=duration_str, inline=True)
 
-                embed.add_field(name="🔊 Volume", value=f"{queue.volume}%", inline=True)
-
                 total_items = queue.total_items()
                 embed.add_field(name="📋 Queue Size", value=f"{total_items} items", inline=True)
 

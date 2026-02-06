@@ -224,7 +224,7 @@ class PlaybackManager:
         """Wait for songs to be ready, then start playback"""
         queue = self.queue_manager.get_queue(guild_id)
 
-        for i in range(20):  # 10 seconds
+        for i in range(20):
             if queue.has_songs():
                 await self.start_playback(voice_client, guild_id)
                 return

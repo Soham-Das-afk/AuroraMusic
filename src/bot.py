@@ -65,7 +65,8 @@ class AuroraMusicBot(commands.Bot):
             self._command_sync_lock = asyncio.Lock()
         cogs_to_load = [
             'cogs.music.music_cog',
-            'cogs.admin'
+            'cogs.admin',
+            'cogs.general'
         ]
         for cog in cogs_to_load:
             try:

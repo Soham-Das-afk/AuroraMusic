@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 from utils.history_manager import history_manager
-from .handlers import ButtonHandlers, VolumeModal
+from .handlers import ButtonHandlers
 from .queue_manager import QueueManager
 from .playback import PlaybackManager
 from .handlers import ButtonHandlers
@@ -451,15 +451,6 @@ class MusicCog(commands.Cog, name="MusicCog"):
 
     async def handle_previous(self, interaction):
         await self.button_handlers.handle_previous(interaction)
-
-    async def handle_rewind(self, interaction):
-        await self.button_handlers.handle_rewind(interaction)
-
-    async def handle_forward(self, interaction):
-        await self.button_handlers.handle_forward(interaction)
-
-    async def handle_volume(self, interaction):
-        await self.button_handlers.handle_volume(interaction)
 
     async def handle_loop(self, interaction):
         await self.button_handlers.handle_loop(interaction)
