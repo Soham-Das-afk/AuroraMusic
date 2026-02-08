@@ -98,6 +98,10 @@ class MusicQueue:
     def set_volume(self, volume):
         """Set volume (10-200%)"""
         self.volume = max(10, min(200, volume))
+
+    def update_current_song(self, song_data):
+        """Update current song data (e.g. after conversion)"""
+        self.current = song_data
         return self.volume
 
     def has_requests(self):

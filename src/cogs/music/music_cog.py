@@ -296,7 +296,7 @@ class MusicCog(commands.Cog, name="MusicCog"):
             finally:
                 queue.processing = False
                 if queue.queue:
-                    await asyncio.sleep(1) # Add a 1-second delay to prevent rate-limiting
+                    await asyncio.sleep(0.1) # Reduced delay to speed up queue processing
                     asyncio.create_task(self.process_queue(guild_id, voice_client))
 
         except Exception as e:

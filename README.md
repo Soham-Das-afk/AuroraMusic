@@ -1,4 +1,4 @@
-# AuroraMusic Discord Music Bot (v4.2.5)
+# AuroraMusic Discord Music Bot (v4.3.4)
 
 <!-- If this repo is public, you can use dynamic GitHub badges below: -->
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
@@ -10,6 +10,7 @@
 Quick links:
 - Latest Release: https://github.com/Soham-Das-afk/AuroraMusic/releases/latest
 - Docker Hub: https://hub.docker.com/r/sohamdas103/auroramusic
+- [Contributing Guidelines](CONTRIBUTING.md) | [Security Policy](SECURITY.md)
 
 AuroraMusic is a feature-rich music bot designed for Discord servers, allowing users to play music from various sources, manage queues, and interact with an intuitive user interface. This bot supports both YouTube and Spotify, providing a seamless music experience for users.
 
@@ -24,6 +25,7 @@ python -m venv .venv
 pip install -r requirements.txt
 Copy-Item .env.example .env
 # edit .env to set BOT_TOKEN and ALLOWED_GUILD_IDS; set YOUTUBE_COOKIES=cookies/youtube.txt (recommended)
+# Optional: Create valid_proxies.txt in root if you need proxies
 python src/bot.py
 ```
 
@@ -36,12 +38,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # edit .env to set BOT_TOKEN and ALLOWED_GUILD_IDS; set YOUTUBE_COOKIES=cookies/youtube.txt (recommended)
+# Optional: Create valid_proxies.txt in root if you need proxies
 python3 src/bot.py
 ```
 
 Docker (both OS):
 ```bash
 # ensure .env exists and is filled; cookies recommended at cookies/youtube.txt
+# Optional: Create valid_proxies.txt in root if you need proxies
 docker compose up -d --build
 docker compose logs -f
 ```
@@ -56,6 +60,7 @@ docker run --name auroramusic ^
    --env-file .env ^
    -v "$PWD/cookies:/app/src/cookies:ro" ^
    -v "$PWD/data:/app/src/data" ^
+   -v "$PWD/valid_proxies.txt:/app/valid_proxies.txt:ro" ^
    -p 8080:8080 ^
    -d sohamdas103/auroramusic:latest
 ```
@@ -68,6 +73,7 @@ docker run --name auroramusic \
    --env-file .env \
    -v "$(pwd)/cookies:/app/src/cookies:ro" \
    -v "$(pwd)/data:/app/src/data" \
+   -v "$(pwd)/valid_proxies.txt:/app/valid_proxies.txt:ro" \
    -p 8080:8080 \
    -d sohamdas103/auroramusic:latest
 ```
@@ -85,36 +91,12 @@ docker run --name auroramusic \
 - **Voice Integration**: Joins voice channels and streams high-quality audio.
 - **Error Handling**: Provides user-friendly error messages and robust exception handling.
 - **Persistent State**: Remembers playback history and controller channel information per guild.
+- **Proxy Support**: Configure HTTP/HTTPS proxies via environment variables or a `valid_proxies.txt` file to bypass regional restrictions.
 - **Streaming-first playback**: The bot streams audio directly from sources. On-disk pre-caching and background downloads have been removed.
 
-## Installation (local)
+## Usage
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/Soham-Das-afk/AuroraMusic.git
-   cd AuroraMusic
-   ```
-
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Create a `.env` file based on the `.env.example` template and fill in your credentials:
-   - On Windows PowerShell:
-     ```
-     Copy-Item .env.example .env
-     ```
-   - Or copy manually in Explorer.
-
-4. Configure `ALLOWED_GUILD_IDS` in the `.env` file to restrict the bot from joining unwanted servers.
-
-## Usage (local)
-
-- Start the bot by running:
-   ```
-   python src/bot.py
-   ```
+Once the bot is up and running:
 
 - Use `/setup` to create a dedicated music controller channel in your server.
 
@@ -124,7 +106,7 @@ docker run --name auroramusic \
 
 - Helpful slash commands:
    - `/help` — quick usage guide and links to your controller channel
-   - `/ping` — bot latency/status (shows AuroraMusic v3.2.37)
+   - `/ping` — bot latency/status (shows AuroraMusic v4.3.4)
    - `/health` — configuration and queue summary
    - `/cleanup` — remove the controller (admin only)
 
@@ -138,7 +120,7 @@ Permissions note:
    The `utils/file_manager.py` module remains in the repo as a harmless placeholder to avoid import errors in integrations.
 
 
-## Step-by-step setup
+## Detailed Setup Guide
 
 ### Windows (local, without Docker)
 
@@ -172,6 +154,7 @@ Permissions note:
    ```powershell
    Copy-Item .env.example .env
    ```
+   - Optional: valid_proxies.txt in root (one proxy per line) or PROXY_URL in .env
    - Open `.env` and set:
      - BOT_TOKEN=your discord bot token
      - ALLOWED_GUILD_IDS=comma,separated,guild,ids
@@ -240,6 +223,8 @@ Optional:
  - `SHOW_BANNER` — show the welcome banner image card (true/false; accepts 1/0, true/false, yes/no, y/n)
  - `SHOW_CONTROLLER_THUMBNAIL` — show a small thumbnail on controller embeds (true/false; accepts 1/0, true/false, yes/no, y/n)
  - `OWNER_CONTACT` — contact string shown for unauthorized guilds (e.g., Discord handle/ID)
+ - `PROXY_URL` — optional single proxy URL (e.g., `http://user:pass@host:port`)
+ - `PROXY_FILE` — optional path to a text file containing one proxy per line (default: `valid_proxies.txt` in project root)
  - `AUTO_RESTART_ENABLED` — enable daily auto-restart (true/false, default true)
  - `AUTO_RESTART_TIME` — time for restart in HH:MM (default 06:00)
  - `AUTO_RESTART_TZ_OFFSET_MINUTES` — timezone offset in minutes (IST=330)
@@ -274,7 +259,8 @@ Build the image and run with Docker Compose (recommended):
 
 1. Ensure `.env` includes the required variables listed above.
 2. Place cookies (recommended) on the host at `AuroraMusic/cookies/youtube.txt` and set `YOUTUBE_COOKIES=cookies/youtube.txt` in `.env` (helps bypass age/region restrictions).
-3. From the project folder:
+3. (Optional) Place `valid_proxies.txt` in the root folder if you need proxy support.
+4. From the project folder:
     ```
     docker compose up -d --build
     docker compose logs -f
@@ -284,6 +270,7 @@ Notes:
 - Personal cookies and runtime data are not baked into the image. The compose file mounts:
    - `./cookies -> /app/src/cookies:ro`
    - `./data -> /app/src/data`
+   - `./valid_proxies.txt -> /app/valid_proxies.txt:ro` (if it exists)
 - To stop the container:
    ```
    docker compose down
@@ -295,7 +282,8 @@ Notes:
 1) Install Docker Desktop and ensure WSL 2 backend is enabled.
 2) Configure `.env` (copy from `.env.example`).
 3) Recommended: Place YouTube cookies at `AuroraMusic/cookies/youtube.txt` and set `YOUTUBE_COOKIES=cookies/youtube.txt` in `.env` (bypasses age or regional access limits).
-4) From the project folder:
+4) Optional: Place `valid_proxies.txt` in the root folder if you need proxies.
+5) From the project folder:
    ```powershell
    docker compose up -d --build
    docker compose logs -f
@@ -315,7 +303,8 @@ Notes:
    newgrp docker
    docker compose version
    ```
-2) Configure `.env` and cookies as above.
+2) Optional: Create `valid_proxies.txt` if needed.
+4) Configure `.env` and cookies as above.
 3) Build and run:
    ```bash
    docker compose up -d --build

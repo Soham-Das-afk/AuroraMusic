@@ -1,6 +1,7 @@
 # Secrets and environment
 .env
 bot.log
+valid_proxies.txt
 
 # Explicitly ignore local test files (keeps testing artifacts out of commits)
 .env
@@ -47,3 +48,7 @@ scripts/
 
 # Local virtualenv
 .venv/
+
+
+.cache/
+logs/

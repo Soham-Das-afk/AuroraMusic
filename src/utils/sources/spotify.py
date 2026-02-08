@@ -277,7 +277,7 @@ class SpotifyHandler(AudioSource):
             if self.youtube is not None:
                 song_data = await asyncio.wait_for(
                     self.youtube.search(query),
-                    timeout=8.0  # Same as YouTube search timeout
+                    timeout=90.0  # Increased timeout to allow for retries and slow proxies
                 )
             else:
                 song_data = None
@@ -297,7 +297,7 @@ class SpotifyHandler(AudioSource):
             else:
                 return None
         except Exception as e:
-            logging.error("Error converting Spotify song: %s", e)
+            logging.error(f"Error converting Spotify song '{spotify_track.get('name', 'Unknown')}': {repr(e)}")
             return None
 
     async def search_playlist(self, playlist_url: str):
