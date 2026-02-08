@@ -1,15 +1,38 @@
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv  # type: ignore
 import logging
 
 load_dotenv()
 
+def _get_dynamic_version():
+    try:
+        # settings.py is in src/config/, so parent.parent is src/, parent.parent.parent is root
+        root_dir = Path(__file__).parent.parent.parent
+        notes_dir = root_dir / "release-notes"
+        if not notes_dir.exists():
+            return "0.0.0"
+        
+        versions = []
+        for file in notes_dir.glob("v*.md"):
+            match = re.search(r"v(\d+\.\d+\.\d+)", file.name)
+            if match:
+                versions.append(match.group(1))
+        
+        if versions:
+            # Sort by semver (integers)
+            versions.sort(key=lambda s: [int(u) for u in s.split('.')])
+            return versions[-1]
+    except Exception as e:
+        logging.warning(f"Failed to determine dynamic version: {e}")
+    return "0.0.1"
+
 class Config:
     """Enhanced configuration with validation"""
 
     BOT_TOKEN = os.getenv('BOT_TOKEN')
-    VERSION = "3.2.37"
+    VERSION = _get_dynamic_version()
 
     ALLOWED_GUILD_IDS = [
         int(x.strip()) for x in os.getenv('SUPPORTED_GUILD_IDS', os.getenv('ALLOWED_GUILD_IDS', '')).split(',')
@@ -19,6 +42,8 @@ class Config:
     SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
     SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
     YOUTUBE_COOKIES = os.getenv('YOUTUBE_COOKIES', '')
+    PROXY_URL = os.getenv('PROXY_URL', '').strip()
+    PROXY_FILE = os.getenv('PROXY_FILE', 'valid_proxies.txt').strip()
     OWNER_CONTACT = os.getenv('OWNER_CONTACT', '').strip()
     BOT_BANNER_URL = os.getenv('BOT_BANNER_URL', '').strip()
     CONTROLLER_THUMBNAIL_URL = os.getenv('CONTROLLER_THUMBNAIL_URL', '').strip()
@@ -30,6 +55,8 @@ class Config:
     DATA_DIR = BASE_DIR / "data"
     
     COOKIES_DIR = BASE_DIR / "cookies"
+    
+    PROXIES = []
 
     AUTO_RESTART_ENABLED = os.getenv('AUTO_RESTART_ENABLED', 'true').strip().lower() in ('1', 'true', 'yes', 'y')
     AUTO_RESTART_TIME = os.getenv('AUTO_RESTART_TIME', '06:00')
@@ -172,9 +199,36 @@ class Config:
             logging.info("🖼️ Using BOT_BANNER_URL from environment for banner fallback")
         if cls.CONTROLLER_THUMBNAIL_URL:
             logging.info("🖼️ CONTROLLER_THUMBNAIL_URL set in environment")
+        if cls.PROXY_URL:
+            cls.PROXIES.append(cls.PROXY_URL)
+            logging.info(f"🌐 Using Proxy from ENV: {cls.PROXY_URL}")
+
+        # Load proxies from file
+        proxy_file_paths = [
+            cls.PROXY_FILE,
+            str(cls.BASE_DIR / cls.PROXY_FILE),
+            str(cls.BASE_DIR.parent / cls.PROXY_FILE),
+            "valid_proxies.txt"
+        ]
+
+        for p_path in proxy_file_paths:
+            if os.path.exists(p_path) and os.path.isfile(p_path):
+                try:
+                    with open(p_path, 'r') as f:
+                        loaded = [l.strip() for l in f if l.strip()]
+                        for p in loaded:
+                            if not p.startswith('http'):
+                                p = f"http://{p}"
+                            if p not in cls.PROXIES:
+                                cls.PROXIES.append(p)
+                    if loaded:
+                        logging.info(f"🌐 Loaded {len(loaded)} proxies from {p_path}")
+                        break
+                except Exception as e:
+                    logging.warning(f"⚠️ Failed to read proxy file {p_path}: {e}")
 
         logging.info(f"🧩 SHOW_BANNER={cls.SHOW_BANNER} | SHOW_CONTROLLER_THUMBNAIL={cls.SHOW_CONTROLLER_THUMBNAIL}")
-        logging.info(f"✅ Configuration validated (Spotify: {has_spotify})")
+        logging.info(f"✅ Configuration validated (Spotify: {has_spotify}, Proxies: {len(cls.PROXIES)})")
         return True
 
     @classmethod

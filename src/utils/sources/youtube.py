@@ -8,6 +8,7 @@ import yt_dlp
 import discord
 import traceback
 import logging
+import random
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Any
 from config.settings import Config
@@ -31,55 +32,64 @@ class YouTubeHandlerSingleton:
     def _cleanup_old_instances(self):
         self._search_pool.clear()
 
-    def _get_search_instance(self, use_cookies: bool = True):
-        """Get search instance optimized for Oracle Cloud"""
-        cache_key = f"search_{use_cookies}_{int(time.time() // 300)}"
-        if cache_key not in self._search_pool:
-            opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'ignoreerrors': True,
-                'skip_download': True,
-                'extract_flat': False,
-                'playlist_items': f'1:{getattr(Config, "MAX_PLAYLIST_SIZE", 100)}',
-                'socket_timeout': 15,
-                'retries': 1,
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['web', 'ios', 'android'],
-                        'player_skip': ['hls', 'dash'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                },
-                'sleep_interval': 2,
-                'max_sleep_interval': 5,
-                'geo_bypass': True,
-                'geo_bypass_country': None,
-                'age_limit': 99,
-            }
-            if use_cookies:
-                cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
-                if cookies_file and Path(cookies_file).exists():
-                    opts['cookiefile'] = str(cookies_file)
-                    logging.info(f"🍪 Using cookies: {cookies_file}")
-            self._search_pool[cache_key] = yt_dlp.YoutubeDL(opts)  # type: ignore[arg-type]
-        return self._search_pool[cache_key]
+    def _get_search_instance(self, use_cookies: bool = True, use_proxy: bool = True):
+        """Get new search instance (stateless for low memory usage)"""
+        opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': True,
+            'skip_download': True,
+            'extract_flat': False,
+            'playlist_items': f'1:{getattr(Config, "MAX_PLAYLIST_SIZE", 100)}',
+            'socket_timeout': 15,
+            'retries': 3,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web', 'ios', 'android'],
+                    'player_skip': ['hls', 'dash'],
+                }
+            },
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+            },
+            'sleep_interval': 2,
+            'max_sleep_interval': 5,
+            'geo_bypass': True,
+            'geo_bypass_country': None,
+            'age_limit': 99,
+        }
+
+        if use_proxy:
+            if Config.PROXIES:
+                opts['proxy'] = random.choice(Config.PROXIES)
+            elif Config.PROXY_URL:
+                opts['proxy'] = Config.PROXY_URL
+
+        if use_cookies:
+            cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
+            if cookies_file and Path(cookies_file).exists():
+                opts['cookiefile'] = str(cookies_file)
+        
+        return yt_dlp.YoutubeDL(opts)
 
     def _get_stream_instance(self, use_cookies: bool = True):
-        cache_key = f"stream_{use_cookies}_{int(time.time() // 600)}"
-        if cache_key not in self._search_pool:
-            opts = Config.YTDL_FORMAT_OPTS.copy()
-            if use_cookies:
-                cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
-                if cookies_file and Path(cookies_file).exists():
-                    opts['cookiefile'] = str(cookies_file)
-            self._search_pool[cache_key] = yt_dlp.YoutubeDL(opts)
-        return self._search_pool[cache_key]
+        """Get new stream instance (stateless for low memory usage)"""
+        opts = Config.YTDL_FORMAT_OPTS.copy()
+        
+        if Config.PROXIES:
+            opts['proxy'] = random.choice(Config.PROXIES)
+        elif Config.PROXY_URL:
+            opts['proxy'] = Config.PROXY_URL
+
+        if use_cookies:
+            cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
+            if cookies_file and Path(cookies_file).exists():
+                opts['cookiefile'] = str(cookies_file)
+        
+        return yt_dlp.YoutubeDL(opts)
 
     
 
@@ -142,16 +152,26 @@ class YouTubeHandlerSingleton:
                     ('android_client', {'extractor_args': {'youtube': {'player_client': ['android']}}}),
                     ('minimal', {'format': 'worst', 'quiet': True})
                 ]
+
+                # Add direct connection fallback if proxies are in use
+                if Config.PROXIES or Config.PROXY_URL:
+                    extraction_strategies.append(
+                        ('direct_fallback', {'extractor_args': {'youtube': {'player_client': ['web']}}, '_no_proxy': True})
+                    )
+
                 for strategy_name, extra_opts in extraction_strategies:
                     try:
                         logging.info(f"🔍 Trying extraction strategy: {strategy_name}")
-                        base_instance = self._get_search_instance(use_cookies=True)
+                        use_proxy = not extra_opts.pop('_no_proxy', False)
+                        
+                        base_instance = self._get_search_instance(use_cookies=True, use_proxy=use_proxy)
                         base_opts = dict(getattr(base_instance, 'params', {}) or {})
                         base_opts.update(extra_opts)
+                        
                         ytdl_tmp = yt_dlp.YoutubeDL(base_opts)  # type: ignore[arg-type]
                         data = await asyncio.wait_for(
                             loop.run_in_executor(None, lambda: ytdl_tmp.extract_info(search_query, download=False)),
-                            timeout=8.0
+                            timeout=15.0
                         )
                         if data and 'entries' in data and data['entries']:
                             entries = data.get('entries') or []
@@ -185,69 +205,94 @@ class YouTubeHandlerSingleton:
 
     async def _web_based_search(self, query: str) -> Optional[Dict[str, Any]]:
         """Web scraping fallback for bot detection"""
-        try:
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10),
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                }
-            ) as session:
+        # Try up to 3 different proxies if available
+        use_proxies = bool(Config.PROXIES or Config.PROXY_URL)
+        retries = 3 if use_proxies and len(Config.PROXIES) > 1 else 1
+        
+        # Add a final attempt without proxy if proxies are in use
+        total_attempts = retries + 1 if use_proxies else retries
 
-                search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+        for attempt in range(total_attempts):
+            try:
+                request_kwargs = {}
+                is_proxy_attempt = attempt < retries and use_proxies
+                
+                if is_proxy_attempt:
+                    if Config.PROXIES:
+                        proxy = random.choice(Config.PROXIES)
+                        request_kwargs['proxy'] = proxy
+                        if attempt > 0:
+                            logging.info(f"🔄 Retry {attempt} with different proxy: {proxy}")
+                    elif Config.PROXY_URL:
+                        request_kwargs['proxy'] = Config.PROXY_URL
+                elif use_proxies:
+                    logging.info("🔄 Retrying web search without proxy...")
 
-                async with session.get(search_url) as response:
-                    if response.status == 200:
-                        html = await response.text()
+                async with aiohttp.ClientSession(
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                    }
+                ) as session:
 
-                        match = re.search(r'var ytInitialData = ({.*?});', html)
-                        if match:
-                            try:
-                                data = json.loads(match.group(1))
+                    search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+                    
+                    async with session.get(search_url, **request_kwargs) as response:
+                        if response.status == 200:
+                            html = await response.text()
 
-                                contents = data.get('contents', {}).get('twoColumnSearchResultsRenderer', {}).get('primaryContents', {}).get('sectionListRenderer', {}).get('contents', [])
+                            match = re.search(r'var ytInitialData = ({.*?});', html)
+                            if match:
+                                try:
+                                    data = json.loads(match.group(1))
 
-                                for section in contents:
-                                    items = section.get('itemSectionRenderer', {}).get('contents', [])
-                                    for item in items:
-                                        if 'videoRenderer' in item:
-                                            video = item['videoRenderer']
-                                            video_id = video.get('videoId', None)
-                                            title = video.get('title', {}).get('runs', [{}])[0].get('text', 'Unknown')
-                                            uploader = "Unknown Artist"
-                                            try:
-                                                channel_info = video.get('ownerText', {}).get('runs', [{}])
-                                                if channel_info and len(channel_info) > 0:
-                                                    uploader = channel_info[0].get('text', 'Unknown Artist')
-                                                if uploader == "Unknown Artist":
-                                                    long_byline = video.get('longBylineText', {}).get('runs', [{}])
-                                                    if long_byline and len(long_byline) > 0:
-                                                        uploader = long_byline[0].get('text', 'Unknown Artist')
-                                                if uploader == "Unknown Artist":
-                                                    uploader = self._extract_artist_from_query(title)
-                                            except Exception as e:
-                                                logging.warning(f"⚠️ Error extracting uploader: {e}")
-                                                uploader = self._extract_artist_from_query(query)
-                                            if video_id and title and uploader:
-                                                return {
-                                                    'id': video_id,
-                                                    'title': title,
-                                                    'webpage_url': f"https://www.youtube.com/watch?v={video_id}",
-                                                    'duration': 180,  # Default duration
-                                                    'uploader': uploader,
-                                                    'source': 'web_scraping',
-                                                    'availability': 'public'
-                                                }
-                            except json.JSONDecodeError:
-                                pass
+                                    contents = data.get('contents', {}).get('twoColumnSearchResultsRenderer', {}).get('primaryContents', {}).get('sectionListRenderer', {}).get('contents', [])
 
-        except Exception as e:
-            logging.error(f"❌ Web-based search error: {e}")
-            return None
+                                    for section in contents:
+                                        items = section.get('itemSectionRenderer', {}).get('contents', [])
+                                        for item in items:
+                                            if 'videoRenderer' in item:
+                                                video = item['videoRenderer']
+                                                video_id = video.get('videoId', None)
+                                                title = video.get('title', {}).get('runs', [{}])[0].get('text', 'Unknown')
+                                                uploader = "Unknown Artist"
+                                                try:
+                                                    channel_info = video.get('ownerText', {}).get('runs', [{}])
+                                                    if channel_info and len(channel_info) > 0:
+                                                        uploader = channel_info[0].get('text', 'Unknown Artist')
+                                                    if uploader == "Unknown Artist":
+                                                        long_byline = video.get('longBylineText', {}).get('runs', [{}])
+                                                        if long_byline and len(long_byline) > 0:
+                                                            uploader = long_byline[0].get('text', 'Unknown Artist')
+                                                    if uploader == "Unknown Artist":
+                                                        uploader = self._extract_artist_from_query(title)
+                                                except Exception as e:
+                                                    logging.warning(f"⚠️ Error extracting uploader: {e}")
+                                                    uploader = self._extract_artist_from_query(query)
+                                                if video_id and title and uploader:
+                                                    return {
+                                                        'id': video_id,
+                                                        'title': title,
+                                                        'webpage_url': f"https://www.youtube.com/watch?v={video_id}",
+                                                        'duration': 180,  # Default duration
+                                                        'uploader': uploader,
+                                                        'source': 'web_scraping',
+                                                        'availability': 'public'
+                                                    }
+                                except json.JSONDecodeError:
+                                    pass
+
+            except Exception as e:
+                logging.warning(f"⚠️ Web-based search error (attempt {attempt+1}): {e}")
+                if attempt < total_attempts - 1:
+                    continue
+                return None
+        return None
 
     async def _create_searchable_fallback(self, query: str) -> Optional[Dict[str, Any]]:
         """Create a searchable fallback result"""
@@ -353,6 +398,13 @@ class YouTubeHandlerSingleton:
                 'geo_bypass_country': None,
                 'age_limit': 99,
             }
+
+            if Config.PROXIES:
+                proxy = random.choice(Config.PROXIES)
+                fast_opts['proxy'] = proxy
+                logging.info(f"🌐 Using proxy for playlist: {proxy}")
+            elif Config.PROXY_URL:
+                fast_opts['proxy'] = Config.PROXY_URL
 
             cookies_file = getattr(Config, "get_cookies_path", lambda: None)()
             if cookies_file:
@@ -604,6 +656,14 @@ class YTDLSource(_BaseVolume):
             # start_time > 0. Add -nostdin and some buffering flags to reduce
             # unexpected seeking behavior on segmented streams.
             before_options = '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+            
+            # Inject proxy if one was used for extraction
+            proxy_url = ytdl_list_formats.params.get('proxy')
+            if proxy_url:
+                # ffmpeg requires http_proxy option for http/https streams
+                before_options += f' -http_proxy "{proxy_url}"'
+                logging.info(f"🌐 [FFmpeg] Using proxy: {proxy_url}")
+
             if start_time and start_time > 0:
                 before_options += f' -ss {start_time}'
             options = '-vn -bufsize 1024k -nostdin -hide_banner -loglevel warning'
