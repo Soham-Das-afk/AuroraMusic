@@ -3,31 +3,56 @@
 .gitignore
 .github
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pytest_cache/
-
-# Env & logs
+# Secrets and environment
 .env
 bot.log
+valid_proxies.txt
 
-# Editor/OS
+# Explicitly ignore local test files
+src/cookies/youtube.txt
+src/data/controller_data.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# VS Code / IDE
 .vscode/
+.idea/
+
+# macOS / Windows cruft
 .DS_Store
 Thumbs.db
 
-# Runtime data (bind-mounted via compose)
-data/
+# Runtime data and caches
+src/cookies/*
+src/data/*
+cookies/*
+data/*
+!cookies/README.md
+!cookies/youtube.txt.example
+!src/cookies/*.example*
+!src/cookies/.gitkeep
+!data/.gitkeep
+*.sqlite
+*.db
 
-# Exclude src-level runtime and secrets
-src/data/
-src/cookies/
+# Build artifacts
+dist/
+build/
+*.egg-info/
 
-# Exclude local virtual environment
+# Ignore helper scripts
+scripts/
+
+# Local virtualenv
 .venv/
+
+.cache/
+logs/
 
 # Misc
 *.swp

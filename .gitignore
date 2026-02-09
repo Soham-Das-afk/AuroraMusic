@@ -1,54 +1,56 @@
-# Secrets and environment
+# --- Secrets & Environment ---
 .env
-bot.log
 valid_proxies.txt
 
-# Explicitly ignore local test files (keeps testing artifacts out of commits)
-.env
-src/cookies/youtube.txt
-src/data/controller_data.json
+# --- Logs & Debugging ---
+logs/
+*.log
+bot.log
 
-# Python
+# --- Python Core & Build ---
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .pytest_cache/
+.cache/
+dist/
+build/
+*.egg-info/
 
-# VS Code / IDE
+# --- Virtual Environments ---
+.venv/
+venv/
+env/
+
+# --- IDE & OS ---
 .vscode/
 .idea/
-
-# macOS / Windows cruft
 .DS_Store
 Thumbs.db
 
-# Runtime data and caches
-# Ignore contents of these folders, but keep placeholders and docs
-src/cookies/*
-src/data/*
-cookies/*
-data/*
-!cookies/README.md
-!cookies/youtube.txt.example
-# Keep example cookie files in source so they can be committed for new users
-!src/cookies/*.example*
-!src/cookies/.gitkeep
-!data/.gitkeep
+# --- Runtime Data ---
+# Database & Storage
 *.sqlite
 *.db
 
-# Build artifacts
-dist/
-build/
-*.egg-info/.env
+# Data Directory (Keep structure, ignore content)
+data/*
+src/data/*
+!data/.gitkeep
+!src/data/.gitkeep
+# Explicit ignores for local runtime files
+src/data/controller_data.json
 
-# Ignore helper scripts created during local maintenance
+# Cookies (Keep examples)
+cookies/*
+src/cookies/*
+!cookies/README.md
+!cookies/youtube.txt.example
+!src/cookies/*.example*
+!src/cookies/.gitkeep
+# Explicit ignores for local runtime files
+src/cookies/youtube.txt
+
+# --- Scripts & Maintenance ---
 scripts/
-
-# Local virtualenv
-.venv/
-
-
-.cache/
-logs/
