@@ -2,7 +2,7 @@
 
 <!-- If this repo is public, you can use dynamic GitHub badges below: -->
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=master)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=main)
 
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
 ![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
@@ -80,13 +80,12 @@ docker run --name auroramusic \
 
 ## Features
 
-- **Modern Controller UI**: A welcome banner card (uses your Discord App banner or `BOT_BANNER_URL`), plus a clean controller embed (no image) with clear fields for queue, next song, volume, and status.
+- **Modern Controller UI**: A welcome banner card, plus a clean controller embed with clear fields for queue, next song, and status.
 - **Multi-Source Playback**: Play music from YouTube and Spotify, including single tracks and playlists.
 - **Queue Management**: Add, view, shuffle, and manage a queue of tracks.
 - **Autoplay**: Automatically find and play related tracks when the queue ends.
 - **Interactive Controls**: Use buttons for play, pause, skip, and other controls directly in Discord.
 - **Slash Commands**: Modern slash commands for setup and status, plus a message-based controller for music requests.
-   - On startup, the bot now clears any old guild slash commands and republishes the latest set for the guilds it's in (clear-and-resync). This ensures you always see the current commands.
 - **Rich Embeds**: Displays detailed information about the currently playing track and the queue.
 - **Voice Integration**: Joins voice channels and streams high-quality audio.
 - **Error Handling**: Provides user-friendly error messages and robust exception handling.
