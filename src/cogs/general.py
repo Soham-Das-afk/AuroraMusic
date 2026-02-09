@@ -9,23 +9,14 @@ class GeneralCog(commands.Cog):
     @commands.command(name="cleanup")
     @commands.has_permissions(administrator=True)
     async def cleanup_prefix(self, ctx, delete_channel: bool = True):
-        """
-        Legacy prefix command for cleanup. Defers to the slash command.
-        This is a fallback and may be removed in a future version.
-        """
+        """Legacy prefix command. Defers to slash command."""
         logging.info(f"Redirecting legacy cleanup command from {ctx.author}")
         
-        # Find the slash command
         slash_command = self.bot.tree.get_command("cleanup")
         
         if slash_command:
-            # Create a mock interaction
             try:
-                # This is a bit of a hack to invoke the slash command logic
-                # It's not a perfect interaction object, but it's enough for the cleanup command
                 interaction = await self.create_mock_interaction(ctx)
-                
-                # Directly call the slash command's callback
                 await slash_command.callback(interaction, delete_channel=delete_channel)
             except Exception as e:
                 logging.error(f"Error redirecting legacy cleanup command: {e}")
@@ -34,10 +25,7 @@ class GeneralCog(commands.Cog):
             await ctx.send("Could not find the cleanup slash command.", delete_after=10)
 
     async def create_mock_interaction(self, ctx):
-        """Creates a mock Interaction object from a Context object."""
-        
-        # This is a simplified mock. It might need more attributes depending on what the
-        # slash command's callback expects.
+        """Creates a mock Interaction object."""
         class MockResponse:
             def __init__(self, interaction):
                 self._interaction = interaction

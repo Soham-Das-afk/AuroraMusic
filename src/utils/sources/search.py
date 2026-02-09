@@ -2,11 +2,11 @@ import asyncio
 import re
 from typing import Optional, Tuple, List, Dict, Any
 from .spotify import spotify_handler
-from .youtube import youtube_handler  # ✅ Import the singleton instance
+from .youtube import youtube_handler
 import logging
 
 def validate_query(query: str) -> bool:
-    """Validate search query for safety and efficiency"""
+    """Validate search query."""
     if not query or len(query.strip()) == 0:
         return False
 
@@ -42,7 +42,7 @@ def validate_query(query: str) -> bool:
     return True
 
 async def search_song(query: str) -> Optional[Dict[str, Any]]:
-    """Universal song search with validation and optimization"""
+    """Universal song search."""
     try:
         if not validate_query(query):
             return None

@@ -2,8 +2,8 @@
 
 import asyncio
 import re
-import time  # ✅ ADD IF MISSING
-import traceback  # ✅ ADD IF MISSING
+import time
+import traceback
 import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Tuple, List
@@ -11,10 +11,9 @@ from pathlib import Path
 from config.settings import Config
 
 class AudioSource(ABC):
-    """Base audio source class with common functionality"""
+    """Base source class."""
 
     def __init__(self):
-        # Downloads are disabled in this build. Keep attribute for compatibility.
         self.downloads_dir = None
         self.session = None
 

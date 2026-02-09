@@ -8,7 +8,6 @@ load_dotenv()
 
 def _get_dynamic_version():
     try:
-        # settings.py is in src/config/, so parent.parent is src/, parent.parent.parent is root
         root_dir = Path(__file__).parent.parent.parent
         notes_dir = root_dir / "release-notes"
         if not notes_dir.exists():

@@ -7,22 +7,22 @@ from utils.sources.youtube import youtube_handler
 from utils.sources.search import search_song, search_playlist, is_playlist_url
 
 class MusicQueue:
-    """Enhanced music queue with caching support"""
+    """Music queue with caching support."""
 
     def __init__(self):
-        self.queue = deque()  # Raw requests (not processed yet)
-        self.processed_queue = deque()  # Processed, ready-to-play songs
+        self.queue = deque()
+        self.processed_queue = deque()
         self.history = deque(maxlen=10)
         self.current = None
         self.volume = 100
         self.loop_mode = False
         self.position = 0
         self.start_time = 0
-        self.processing = False  # Flag to prevent concurrent processing
+        self.processing = False
         
 
     def add_request(self, request_data):
-        """Add a raw request to the queue with proper order"""
+        """Add request to queue."""
         if 'order' not in request_data:
             existing_orders = [req.get('order', 0) for req in self.queue]
             next_order = max(existing_orders, default=0) + 1
@@ -37,7 +37,7 @@ class MusicQueue:
         order = request_data.get('order', '?')
 
     def add_processed_song(self, song_data):
-        """Add a processed song to the ready queue"""
+        """Add processed song."""
         try:
             logging.info(f"🟢 Processed song queued: {song_data.get('title', 'Unknown')} requested_by={song_data.get('requested_by')}")
         except Exception:
@@ -45,7 +45,7 @@ class MusicQueue:
         self.processed_queue.append(song_data)
 
     def get_next(self):
-        """Get next processed song"""
+        """Get next song."""
         if self.current and self.current.get('title'):
             if not self.history or self.history[-1].get('id') != self.current.get('id'):
                 self.history.append(self.current)

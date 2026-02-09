@@ -14,7 +14,7 @@ from typing import Optional, Dict, List, Tuple, Any
 from config.settings import Config
 
 class YouTubeHandlerSingleton:
-    """Singleton YouTube handler for YouTube extraction and streaming."""
+    """YouTube handler singleton."""
 
     _instance = None
     _initialized = False
@@ -33,7 +33,7 @@ class YouTubeHandlerSingleton:
         self._search_pool.clear()
 
     def _get_search_instance(self, use_cookies: bool = True, use_proxy: bool = True):
-        """Get new search instance (stateless for low memory usage)"""
+        """Get new search instance."""
         opts = {
             'quiet': True,
             'no_warnings': True,

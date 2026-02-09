@@ -11,12 +11,12 @@ from .base import AudioSource
 try:
     from .youtube import youtube_handler
 except ImportError:
-    youtube_handler = None  # Fallback if not available
+    youtube_handler = None
 
 from config.settings import Config
 
 class SpotifyHandler(AudioSource):
-    """Enhanced Spotify handler with streaming processing like YouTube"""
+    """Spotify handler."""
 
     def __init__(self):
         super().__init__()
@@ -29,7 +29,7 @@ class SpotifyHandler(AudioSource):
         self._initialize_spotify()
 
     def _initialize_spotify(self):
-        """Initialize Spotify client with error handling"""
+        """Initialize Spotify client."""
         if not Config.SPOTIFY_CLIENT_ID or not Config.SPOTIFY_CLIENT_SECRET:
             logging.warning("Spotify credentials not configured")
             return
@@ -46,7 +46,7 @@ class SpotifyHandler(AudioSource):
             self.spotify = None
 
     def is_url_supported(self, url: str) -> bool:
-        """Check if URL is from Spotify"""
+        """Check if URL is supported."""
         return bool(re.search(r'(open\.spotify\.com|spotify\.com|spotify:)', url, re.IGNORECASE))
 
     def is_playlist_url(self, url: str) -> bool:

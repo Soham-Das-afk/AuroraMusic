@@ -1,6 +1,6 @@
 import asyncio
 import discord
-import time  # ✅ Make sure this is imported
+import time
 import logging
 import traceback
 from typing import Optional, Dict, Any
@@ -8,15 +8,15 @@ from utils.sources.youtube import YTDLSource, youtube_handler
 from utils.history_manager import history_manager
 
 class PlaybackManager:
-    """Handles all playback logic"""
+    """Playback logic handler."""
 
     def __init__(self, music_cog, queue_manager):
         self.music_cog = music_cog
         self.queue_manager = queue_manager
         self._seeking_guilds = set()
-        self._manual_operations = set()  # Track manual skip/previous operations
-        self._playback_positions = {}  # Track song positions
-        self._song_start_times = {}   # Track when songs started
+        self._manual_operations = set()
+        self._playback_positions = {}
+        self._song_start_times = {}
 
         self.performance_metrics = {
             'playback_errors': 0,
@@ -26,14 +26,10 @@ class PlaybackManager:
         }
 
     async def start_playback(self, voice_client, guild_id: int):
-        """Start playing with better error handling"""
+        """Start playing."""
         try:
             if not voice_client or not voice_client.is_connected():
                 return False
-
-            # Defer checking for mismatched/stuck players until we've determined
-            # what the next song to play will be. This avoids referencing
-            # variables before they are set.
 
             queue = self.queue_manager.get_queue(guild_id)
 
@@ -42,7 +38,6 @@ class PlaybackManager:
                 await self.music_cog.controller_manager.update_controller_embed(guild_id, None, "waiting")
                 return False
 
-            # On-demand conversion for Spotify tracks
             if next_song.get('needs_conversion'):
                 logging.info(f"🎵 Converting Spotify track: {next_song.get('title')}")
                 query = next_song.get('conversion_query')

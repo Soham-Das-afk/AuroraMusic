@@ -7,7 +7,7 @@ import asyncio
 import time
 
 class HistoryManager:
-    """Manages reading and writing playback history to a JSON file."""
+    """Manages history IO."""
 
     _instance = None
     _initialized = False
@@ -26,7 +26,7 @@ class HistoryManager:
             self._initialized = True
 
     def _load_history(self):
-        """Loads the history from the JSON file into memory."""
+        """Load history from JSON."""
         try:
             if self.history_file.exists():
                 with open(self.history_file, 'r', encoding='utf-8') as f:
@@ -39,7 +39,7 @@ class HistoryManager:
             self._history_data = {}
 
     def _save_history(self):
-        """Saves the current in-memory history to the JSON file."""
+        """Save history to JSON."""
         try:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(self._history_data, f, indent=4)
@@ -47,7 +47,7 @@ class HistoryManager:
             logging.error(f"❌ Error saving playback history: {e}")
 
     async def add_to_history(self, guild_id: int, user_id: int, song_data: Dict[str, Any]):
-        """Adds a song to the playback history for a specific guild."""
+        """Add song to history."""
         async with self._lock:
             guild_str = str(guild_id)
             if guild_str not in self._history_data:

@@ -28,26 +28,26 @@ class PerformanceMonitor:
         self.error_counts = defaultdict(int)
 
     def start_timer(self, operation: str, identifier: str = "default") -> str:
-        """Start timing an operation"""
+        """Start timer."""
         key = f"{operation}:{identifier}"
         self.start_times[key] = time.time()
         return key
 
     def end_timer(self, key: str) -> float:
-        """End timing and record metric"""
+        """End timer."""
         if key in self.start_times:
             duration = time.time() - self.start_times.pop(key)
             operation = key.split(':')[0]
             self.metrics[operation].append(duration)
 
             if len(self.metrics[operation]) > 50:
-                self.metrics[operation].pop(0)  # ✅ FIXED: Missing line
+                self.metrics[operation].pop(0)
 
             return duration
         return 0.0
 
     def record_error(self, operation: str):
-        """Record an error for an operation"""
+        """Record error."""
         self.error_counts[operation] += 1
 
     def get_avg_time(self, operation: str) -> float:

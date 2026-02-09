@@ -1,6 +1,6 @@
-import discord  # type: ignore
-from discord.ext import commands  # type: ignore
-from discord import app_commands  # type: ignore
+import discord
+from discord.ext import commands
+from discord import app_commands
 import json
 import os
 import logging
@@ -13,7 +13,7 @@ discord = cast(Any, discord)
 CONTROLLER_DATA_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'controller_data.json')
 
 def load_controller_data():
-    """Load controller data from JSON file"""
+    """Load controller data."""
     try:
         if os.path.exists(CONTROLLER_DATA_FILE):
             with open(CONTROLLER_DATA_FILE, 'r') as f:
@@ -23,7 +23,7 @@ def load_controller_data():
     return {}
 
 def save_controller_data(data):
-    """Save controller data to JSON file"""
+    """Save controller data."""
     try:
         os.makedirs(os.path.dirname(CONTROLLER_DATA_FILE), exist_ok=True)
         with open(CONTROLLER_DATA_FILE, 'w') as f:
@@ -31,11 +31,11 @@ def save_controller_data(data):
     except Exception as e:
         logging.error("Error saving controller data: %s", e)
 
-class MusicControlView(discord.ui.View):  # type: ignore[attr-defined]
+class MusicControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(emoji='⏮️', label='Previous', style=discord.ButtonStyle.secondary, custom_id='music_previous', row=0)  # type: ignore[attr-defined]
+    @discord.ui.button(emoji='⏮️', label='Previous', style=discord.ButtonStyle.secondary, custom_id='music_previous', row=0)
     async def previous(self, interaction: Any, button: Any):
         try:
             music_cog = interaction.client.get_cog('MusicCog')

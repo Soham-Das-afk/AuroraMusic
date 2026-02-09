@@ -15,25 +15,25 @@ class ButtonHandlers:
         self._error_counts = {}
 
     def _check_cooldown(self, user_id: int, button_type: str) -> bool:
-        """Check if user is on cooldown for button"""
+        """Check button cooldown."""
         key = f"{user_id}:{button_type}"
         current_time = time.time()
 
         if key in self._button_cooldowns:
-            if current_time - self._button_cooldowns[key] < 1.0:  # 1 second cooldown
+            if current_time - self._button_cooldowns[key] < 1.0:
                 return False
 
         self._button_cooldowns[key] = current_time
         return True
 
     def _record_error(self, button_type: str):
-        """Record button error for monitoring"""
+        """Record error."""
         self._error_counts[button_type] = self._error_counts.get(button_type, 0) + 1
         if self._error_counts[button_type] > 10:
             logging.warning(f"High error count for {button_type}: {self._error_counts[button_type]}")
 
     async def handle_play_pause(self, interaction):
-        """Enhanced play/pause with state validation"""
+        """Play/pause handler."""
         if not self._check_cooldown(interaction.user.id, "play_pause"):
             return
 

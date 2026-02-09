@@ -12,13 +12,13 @@ class ControllerManager:
     def __init__(self, music_cog):
         self.music_cog = music_cog
         self.controller_data_file = Path(__file__).parent.parent.parent / "data" / "controller_data.json"
-        self._update_tasks = {}  # Track pending updates
-        self._last_update = {}   # Track last update time
+        self._update_tasks = {}
+        self._last_update = {}
         self._cached_banner_url = None
         self._last_banner_fetch = 0.0
 
     def is_controller_channel(self, guild_id: int, channel_id: int) -> bool:
-        """Check if a channel is a registered controller channel for a guild."""
+        """Check if channel is a controller channel."""
         controller_data = self.load_controller_data()
         guild_str = str(guild_id)
         if guild_str in controller_data:
@@ -26,11 +26,11 @@ class ControllerManager:
         return False
 
     async def _get_banner_url(self):
-        """Get and cache the application's banner URL."""
+        """Get and cache application banner URL."""
         try:
             now = time.time()
             cache_age = now - self._last_banner_fetch
-            if self._cached_banner_url and cache_age < 300:  # cache 5 minutes
+            if self._cached_banner_url and cache_age < 300:
                 return self._cached_banner_url
 
             url = None

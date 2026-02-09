@@ -1,4 +1,4 @@
-# AuroraMusic Discord Music Bot (v4.3.4)
+# AuroraMusic Discord Music Bot (v4.3.5)
 
 <!-- If this repo is public, you can use dynamic GitHub badges below: -->
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
@@ -102,7 +102,7 @@ Once the bot is up and running:
 
 - In the controller channel:
    - Send a song name, YouTube URL, or Spotify link (no prefix needed)
-   - Use the controller buttons (Play/Pause, Skip, Previous, Stop, Rewind/Forward 10s, Volume, Loop, Shuffle)
+   - Use the controller buttons (Play/Pause, Skip, Previous, Stop, Loop, Shuffle)
 
 - Helpful slash commands:
    - `/help` — quick usage guide and links to your controller channel
@@ -112,13 +112,6 @@ Once the bot is up and running:
 
 Permissions note:
 - The bot should have “Manage Messages” in the controller channel for auto-cleanup of helper messages.
-
-### Streaming & file management
-
-- This build uses streaming-first playback: audio is streamed directly from sources (YouTube/Spotify) and the bot does not write audio files to disk.
-- If you previously mounted a `downloads` folder in Docker or on the host, you may remove that volume — it is not used by the current build.
-   The `utils/file_manager.py` module remains in the repo as a harmless placeholder to avoid import errors in integrations.
-
 
 ## Detailed Setup Guide
 
@@ -247,10 +240,6 @@ If your Discord App banner isn’t set or you prefer a custom GIF, set `BOT_BANN
        - It must look like `https://i.ibb.co/xxxx/banner.gif` (note the `i.ibb.co` host and file extension)
    4. Set `BOT_BANNER_URL` in `.env` to that direct link
 
-- GitHub via jsDelivr (immutable + fast CDN):
-   - Commit `assets/banner.gif` to your repo
-   - Use: `https://cdn.jsdelivr.net/gh/<user>/<repo>@<tag-or-commit>/assets/banner.gif`
-
 Tip: Avoid page/album links (they return HTML). You want links ending in `.gif`, `.png`, or `.jpg` with `Content-Type: image/*`.
 
 ## Docker
@@ -335,19 +324,7 @@ Notes:
    python src/bot.py
    ```
 
-## CI/CD
-
-- Pushing a tag like `v3.2.37` triggers GitHub Actions to:
-   - Build and push Docker images (if secrets are configured)
-   - Create a GitHub Release with notes
-
-- Required repo secrets (Settings → Secrets and variables → Actions):
-   - `DOCKERHUB_USERNAME`: your Docker Hub username (e.g., `sohamdas103`)
-   - `DOCKERHUB_TOKEN`: a Docker Hub Personal Access Token with write permissions
-
-- If secrets are not configured, the workflow will still create the GitHub Release and skip Docker push.
-
-## Troubleshooting
+## Troubleshooting/Faq 
 
 - Token/authorization errors: Double-check `BOT_TOKEN` in `.env` and that the bot was invited with the right scopes (bot + applications.commands).
 - Slash commands not showing: The bot clears and re-syncs per-guild on startup, but global propagation can still take time. Try re-inviting or restarting; check logs.
@@ -357,21 +334,12 @@ Notes:
 
 ## Maintenance
 
-I maintain this project when it’s needed or when I get time. If you run into issues or have suggestions, feel free to reach out directly:
+I maintain this project when it’s needed or when I get time. 
+If you run into issues or have suggestions, feel free to reach out directly:
 
 - Discord: @sick._.duck.103 (Discord ID: 616499661951467530)
 
-
-
 ## License
 
-This project uses a source-available license tailored for AuroraMusic. You may use and host the bot, and propose improvements, but you may not publish, distribute, sublicense, or sell the software or derivatives. See the `LICENSE` file for the full terms.
-
-## Ownership and attribution
-
-The source code in this repository is solely owned by the author (Discord: @sick._.duck.103, ID: 616499661951467530).
-
-- You are allowed to use and host this code to run Discord music bots.
-- You are not allowed to claim ownership or authorship of this code.
-- If you redistribute or fork, retain the existing credits and the notice from this repository (see `NOTICE`).
-- If you are hosting the bot publicly, keep the in-bot footer credit and/or provide visible attribution in your deployment.
+This project uses a source-available license tailored for AuroraMusic. 
+See the `LICENSE` file for the full terms.

@@ -10,14 +10,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from config.settings import Config
 
-# Setup logging with absolute path
 project_root = Path(__file__).parent.parent
 log_dir = project_root / 'logs'
-log_dir.mkdir(exist_ok=True)  # Ensure the logs directory exists
+log_dir.mkdir(exist_ok=True)
 log_file = log_dir / 'bot.log'
 
 class SafeConsoleFilter(logging.Filter):
-    """Sanitize log records for consoles that can't render emojis/UTF-8."""
+    """Sanitize log records."""
     def __init__(self, encoding: str | None = None):
         super().__init__()
         self.encoding = encoding or getattr(sys.stdout, 'encoding', None) or 'cp1252'
@@ -52,7 +51,7 @@ root_logger.addHandler(file_handler)
 root_logger.addHandler(console_handler)
 
 class AuroraMusicBot(commands.Bot):
-    """Main bot class for AuroraMusic"""
+    """Main bot class."""
 
     def __init__(self, intents):
         super().__init__(command_prefix=commands.when_mentioned_or('!'), intents=intents, help_command=None)
@@ -108,12 +107,7 @@ class AuroraMusicBot(commands.Bot):
             logging.error(f"❌ Failed to sync app commands: {sync_err}")
 
     async def _attempt_command_sync(self, guild: discord.Object | None = None, global_sync: bool = False) -> None:
-        """Attempt to sync application commands with retries and exponential backoff.
-
-        Params in Config (optional):
-          - COMMAND_SYNC_RETRIES (int, default 3)
-          - COMMAND_SYNC_BACKOFF_BASE (float, default 1.5)
-        """
+        """Sync app commands with retries/backoff."""
         max_retries = int(getattr(Config, 'COMMAND_SYNC_RETRIES', 3))
         backoff_base = float(getattr(Config, 'COMMAND_SYNC_BACKOFF_BASE', 1.5))
 
@@ -148,10 +142,7 @@ class AuroraMusicBot(commands.Bot):
                         raise
 
     def _is_now_in_offpeak_window(self) -> bool:
-        """Return True if current UTC hour is inside configured off-peak window.
-
-        Handles windows that wrap midnight (e.g., start=22, end=4).
-        """
+        """Check if current UTC hour is in off-peak window."""
         try:
             start = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC', 2))
             end = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC', 5))
@@ -164,10 +155,7 @@ class AuroraMusicBot(commands.Bot):
             return now_hour >= start or now_hour < end
 
     async def _schedule_global_sync_at_offpeak(self):
-        """Sleep until the next off-peak window start (UTC) and perform a global sync once.
-
-        This schedules a one-shot sync and sets `_commands_synced_global` when done.
-        """
+        """Wait for off-peak window to run global sync."""
         try:
             start = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_START_HOUR_UTC', 2))
             end = int(getattr(Config, 'GLOBAL_COMMAND_SYNC_OFFPEAK_END_HOUR_UTC', 5))
@@ -259,8 +247,8 @@ class AuroraMusicBot(commands.Bot):
                 await guild.leave()
 
         await self.change_presence(
-            activity=discord.Activity(  # type: ignore[attr-defined]
-                type=discord.ActivityType.listening,  # type: ignore[attr-defined]
+            activity=discord.Activity(
+                type=discord.ActivityType.listening,
                 name="🎵 music | /help"
             )
         )
@@ -284,7 +272,7 @@ class AuroraMusicBot(commands.Bot):
             for g in self.guilds:
                 if Config.is_guild_allowed(g.id):
                     try:
-                        guild_obj = discord.Object(id=g.id)  # type: ignore[attr-defined]
+                        guild_obj = discord.Object(id=g.id)
                         try:
                             self.tree.clear_commands(guild=guild_obj)
                             await self._attempt_command_sync(guild=guild_obj)
@@ -352,7 +340,7 @@ class AuroraMusicBot(commands.Bot):
                 await asyncio.sleep(600)
 
     async def _restart_process(self):
-        """Gracefully close the bot and exec a fresh Python process for this script."""
+        """Restart bot process."""
         try:
             for handler in logging.getLogger().handlers:
                 try:
@@ -388,10 +376,6 @@ class AuroraMusicBot(commands.Bot):
             except Exception:
                 pass
 
-            # Re-exec using the same invocation (preserve argv). This covers
-            # cases where the process was started via a wrapper script or with
-            # additional arguments. Use subprocess fallback on platforms where
-            # execv may not behave as expected (Windows).
             python = sys.executable
             args = [python] + sys.argv
             logging.info(f"🚀 Re-exec: {' '.join(args)}")
@@ -401,8 +385,7 @@ class AuroraMusicBot(commands.Bot):
             except Exception as e:
                 logging.warning(f"⚠️ os.execv failed: {e}. Falling back to spawn + exit")
                 try:
-                    # Spawn a new process and exit the current one. This is
-                    # more compatible on Windows where execv semantics differ.
+
                     subprocess.Popen(args, close_fds=True)
                 except Exception as e2:
                     logging.error(f"❌ Fallback spawn also failed: {e2}")
@@ -441,7 +424,7 @@ class AuroraMusicBot(commands.Bot):
             await guild.leave()
         else:
             try:
-                await self.tree.sync(guild=discord.Object(id=guild.id))  # type: ignore[attr-defined]
+                await self.tree.sync(guild=discord.Object(id=guild.id))
                 logging.info(f"✅ Synced app commands for new guild {guild.id}")
             except Exception as e:
                 logging.error(f"❌ Failed to sync commands for new guild {guild.id}: {e}")
