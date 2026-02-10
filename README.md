@@ -2,7 +2,7 @@
 
 <!-- If this repo is public, you can use dynamic GitHub badges below: -->
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/Soham-Das-afk/AuroraMusic)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/release.yml?branch=main)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/Soham-Das-afk/AuroraMusic/ci.yml?branch=main)
 
 ![Docker Image Version (latest by date)](https://img.shields.io/docker/v/sohamdas103/auroramusic?label=docker)
 ![Docker Pulls](https://img.shields.io/docker/pulls/sohamdas103/auroramusic)
@@ -10,6 +10,8 @@
 Quick links:
 - Latest Release: https://github.com/Soham-Das-afk/AuroraMusic/releases/latest
 - Docker Hub: https://hub.docker.com/r/sohamdas103/auroramusic
+- Demo Server: https://discord.gg/6nczZbSmZ6 (Join for support, testing, and updates)
+
 - [Contributing Guidelines](CONTRIBUTING.md) | [Security Policy](SECURITY.md)
 
 AuroraMusic is a feature-rich music bot designed for Discord servers, allowing users to play music from various sources, manage queues, and interact with an intuitive user interface. This bot supports both YouTube and Spotify, providing a seamless music experience for users.
