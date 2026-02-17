@@ -100,7 +100,7 @@ jobs:
 
       - name: Trivy image vulnerability scan
         if: env.DOCKER_USER && env.DOCKER_TOKEN
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.34.0
         continue-on-error: true
         with:
           image-ref: sohamdas103/auroramusic:${{ steps.vars.outputs.version }}
